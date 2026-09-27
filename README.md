@@ -13,8 +13,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-c96442" alt="MIT"></a>
 </p>
 
-![Expanding brain meme ending in Marticle](assets/expanding-brain.svg)
-
 <p align="center">
   <img src="assets/demo.gif" width="320" alt="Marticle popup: reading the article, then Copy as Markdown, then Copied">
 </p>
