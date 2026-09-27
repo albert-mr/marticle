@@ -1,0 +1,13 @@
+{
+  "name": "marticle",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check extension/extract.js && node --check extension/popup.js"
+  },
+  "devDependencies": { "jsdom": "^24.1.0" }
+}
