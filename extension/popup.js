@@ -1,18 +1,20 @@
 import { extractArticle } from './extract.js';
 
 const $ = selector => document.querySelector(selector);
-const title = $('#title'), status = $('#status'), button = $('#copy'), warnings = $('#warnings'), preview = $('#preview');
+const title = $('#title'), status = $('#status'), copyButton = $('#copy'), saveButton = $('#save'), warnings = $('#warnings'), preview = $('#preview');
 let article;
 
 function show(message, error = false) {
   status.textContent = message;
   status.classList.toggle('error', error);
 }
+const plural = (n, word) => n && `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
 async function load() {
   article = null;
-  button.disabled = true;
-  button.textContent = 'Copy as Markdown';
+  copyButton.disabled = saveButton.disabled = true;
+  copyButton.textContent = 'Copy as Markdown';
+  copyButton.classList.remove('done');
   title.textContent = 'Reading article…';
   show('');
   warnings.hidden = true;
@@ -26,26 +28,27 @@ async function load() {
     if (!result?.ok) throw new Error(result?.error || 'The page returned nothing. Reload it and try again.');
     article = result;
     const { words, images, embeds } = article.stats;
-    const plural = (n, word) => n && `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+    const stats = [`${Math.max(1, Math.round(words / 200))} min read`, plural(images, 'image'), plural(embeds, 'embedded post')].filter(Boolean).join(' · ');
     title.textContent = article.title;
-    const stats = [plural(words, 'word'), plural(images, 'image'), plural(embeds, 'embedded post')].filter(Boolean).join(' · ');
-    show([article.author && `by ${article.author}`, stats].filter(Boolean).join('\n'));
+    show([article.author, stats].filter(Boolean).join('\n'));
     preview.value = article.markdown;
     warnings.replaceChildren(...article.warnings.map(text => Object.assign(document.createElement('li'), { textContent: text })));
     warnings.hidden = !article.warnings.length;
+    saveButton.disabled = false;
   } catch (error) {
     title.textContent = 'Nothing to copy';
     show(error.message, true);
-    button.textContent = 'Try again';
+    copyButton.textContent = 'Try again';
   }
-  button.disabled = false;
+  copyButton.disabled = false;
 }
 
 async function copy() {
   try {
     await navigator.clipboard.writeText(article.markdown);
-    button.textContent = 'Copied ✓';
-    setTimeout(() => { button.textContent = 'Copy as Markdown'; }, 1500);
+    copyButton.textContent = '✓ Copied';
+    copyButton.classList.add('done');
+    setTimeout(() => { copyButton.textContent = 'Copy as Markdown'; copyButton.classList.remove('done'); }, 1500);
   } catch {
     $('details').open = true;
     preview.focus();
@@ -54,5 +57,13 @@ async function copy() {
   }
 }
 
-button.addEventListener('click', () => (article ? copy() : load()));
+function save() {
+  const name = article.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'article';
+  const link = Object.assign(document.createElement('a'), { download: `${name}.md`,
+    href: URL.createObjectURL(new Blob([article.markdown], { type: 'text/markdown' })) });
+  link.click();
+}
+
+copyButton.addEventListener('click', () => (article ? copy() : load()));
+saveButton.addEventListener('click', save);
 load();
