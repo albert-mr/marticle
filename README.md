@@ -25,7 +25,7 @@ on your clipboard. Paste it into Claude, ChatGPT, Obsidian, or a plain text file
 
 ## Install
 
-Marticle isn't on the Chrome Web Store yet, so load it as an unpacked extension:
+Marticle is distributed here rather than on the Chrome Web Store. Load it as an unpacked extension:
 
 1. Download the zip from the [latest release](https://github.com/albert-mr/marticle/releases/latest) and unzip it. (Or `git clone` this repo and use its `extension` folder.)
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick the unzipped folder.
