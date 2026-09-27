@@ -27,8 +27,8 @@ on your clipboard. Paste it into Claude, ChatGPT, Obsidian, or a plain text file
 
 Marticle isn't on the Chrome Web Store yet, so load it as an unpacked extension:
 
-1. [Download this repo as a zip](https://github.com/albert-mr/marticle/archive/refs/heads/main.zip) and unzip it, or `git clone` it.
-2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick the `extension` folder.
+1. Download the zip from the [latest release](https://github.com/albert-mr/marticle/releases/latest) and unzip it. (Or `git clone` this repo and use its `extension` folder.)
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick the unzipped folder.
 3. Pin Marticle from the puzzle-piece menu so it's one click away.
 
 Works in any Chromium browser: Chrome, Brave, Edge, Arc.
