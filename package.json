@@ -1,13 +1,19 @@
 {
   "name": "marticle",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check extension/extract.js && node --check extension/popup.js"
+    "check": "node --check extension/extract.js && node --check extension/popup.js && node --check extension/print.js",
+    "vendor": "cp node_modules/marked/lib/marked.esm.js extension/vendor/marked.esm.js"
   },
-  "devDependencies": { "jsdom": "^24.1.0" }
+  "devDependencies": {
+    "jsdom": "^24.1.0",
+    "marked": "^18.0.14"
+  }
 }

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Marticle</title>
+  <link rel="stylesheet" href="print.css">
+</head>
+<body>
+  <div class="bar">
+    <img src="icons/32.png" alt="">
+    <span id="hint" role="status" aria-live="polite">Loading images…</span>
+    <button id="print">Save as PDF</button>
+  </div>
+  <main class="article">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      <span>Article</span>
+    </div>
+    <h1 id="title"></h1>
+    <div class="author">
+      <div class="avatar" id="avatar" aria-hidden="true"></div>
+      <div class="meta"><b id="name"></b><span id="byline"></span></div>
+    </div>
+    <div class="body" id="body"></div>
+    <p class="foot" id="foot" hidden>Source: <a id="source"></a></p>
+  </main>
+  <script type="module" src="print.js"></script>
+</body>
+</html>

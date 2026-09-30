@@ -1,7 +1,7 @@
 import { extractArticle } from './extract.js';
 
 const $ = selector => document.querySelector(selector);
-const title = $('#title'), status = $('#status'), copyButton = $('#copy'), saveButton = $('#save'), warnings = $('#warnings'), preview = $('#preview');
+const title = $('#title'), status = $('#status'), copyButton = $('#copy'), saveButton = $('#save'), pdfButton = $('#pdf'), warnings = $('#warnings'), preview = $('#preview');
 let article;
 
 function show(message, error = false) {
@@ -12,7 +12,7 @@ const plural = (n, word) => n && `${n.toLocaleString()} ${word}${n === 1 ? '' : 
 
 async function load() {
   article = null;
-  copyButton.disabled = saveButton.disabled = true;
+  copyButton.disabled = saveButton.disabled = pdfButton.disabled = true;
   copyButton.textContent = 'Copy as Markdown';
   copyButton.classList.remove('done');
   title.textContent = 'Reading article…';
@@ -34,7 +34,7 @@ async function load() {
     preview.value = article.markdown;
     warnings.replaceChildren(...article.warnings.map(text => Object.assign(document.createElement('li'), { textContent: text })));
     warnings.hidden = !article.warnings.length;
-    saveButton.disabled = false;
+    saveButton.disabled = pdfButton.disabled = false;
   } catch (error) {
     title.textContent = 'Nothing to copy';
     show(error.message, true);
@@ -64,6 +64,12 @@ function save() {
   link.click();
 }
 
+// The print page renders the Markdown and opens Chrome's print dialog; "Save as PDF" is a native destination.
+function pdf() {
+  chrome.tabs.create({ url: `${chrome.runtime.getURL('print.html')}#${encodeURIComponent(article.markdown)}` });
+}
+
 copyButton.addEventListener('click', () => (article ? copy() : load()));
 saveButton.addEventListener('click', save);
+pdfButton.addEventListener('click', pdf);
 load();

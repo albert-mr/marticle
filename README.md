@@ -4,12 +4,12 @@
 
 <h1 align="center">Marticle</h1>
 
-<p align="center"><strong>Copy that.</strong> One click turns any X Article into clean Markdown.</p>
+<p align="center"><strong>Copy that.</strong> One click turns any X Article into clean Markdown, or a PDF.</p>
 
 <p align="center">
   <a href="https://github.com/albert-mr/marticle/actions/workflows/test.yml"><img src="https://github.com/albert-mr/marticle/actions/workflows/test.yml/badge.svg" alt="tests"></a>
   <img src="https://img.shields.io/badge/manifest-v3-0f1419" alt="Manifest V3">
-  <img src="https://img.shields.io/badge/dependencies-none-c96442" alt="no dependencies">
+  <img src="https://img.shields.io/badge/build%20step-none-c96442" alt="no build step">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-c96442" alt="MIT"></a>
 </p>
 
@@ -39,6 +39,8 @@ Open an article on x.com and click Marticle.
 
 - **Copy as Markdown** puts the article on your clipboard.
 - **⤓** saves it as a `.md` file named after the title.
+- **PDF** opens the article in a print-ready X-style layout and Chrome's print dialog. Pick **Save as PDF** as the
+  destination (and untick *Headers and footers* once; Chrome remembers both).
 - **Preview** shows exactly what you'll get.
 
 ## What you get
@@ -48,6 +50,7 @@ Open an article on x.com and click Marticle.
 - Images as direct full-resolution URLs with alt text and captions
 - Embedded posts as quoted blocks with attribution and links
 - Videos as links. Nothing is transcribed or invented.
+- PDF: the same content laid out like an X Article, with the title, author, date, images and clickable links.
 
 Marticle copies what the page has loaded. If X hasn't finished rendering the article, wait a moment and click **Try again**.
 Image links don't attach the actual images to an AI chat; upload those separately when the model needs to see them.
@@ -55,7 +58,8 @@ Image links don't attach the actual images to an AI chat; upload those separatel
 ## Privacy
 
 Marticle reads the current tab only when you click it, converts the article in memory, and hands you the result.
-It makes no network requests and stores nothing.
+It makes no network requests of its own and stores nothing. The PDF view loads the article's images from X's image
+servers, exactly as x.com does, so Chrome can print them.
 
 Permissions: `activeTab` and `scripting` to read the open article, `clipboardWrite` to copy it.
 
@@ -67,12 +71,15 @@ npm test
 ```
 
 The extractor is `extension/extract.js`, one self-contained function that Chrome injects into the article tab.
-The popup is `extension/popup.js`. Tests run both against fixture DOMs in jsdom. Pull requests welcome.
+The popup is `extension/popup.js`. The PDF view is `extension/print.js`, which renders the Markdown with a vendored
+copy of [marked](https://github.com/markedjs/marked) (`npm run vendor` refreshes it). Tests run against fixture DOMs
+in jsdom. Pull requests welcome.
 
 ## Credits
 
 The extraction and Markdown conversion were adapted from [X Article Export](https://github.com/everettjf/x-article-export-pdf) by everettjf (MIT).
 X's DOM structure was cross-checked against [Defuddle](https://github.com/kepano/defuddle)'s test fixtures.
+The PDF view renders Markdown with [marked](https://github.com/markedjs/marked) (MIT).
 The icon uses the public-domain [Markdown Mark](https://github.com/dcurtis/markdown-mark).
 
 [MIT](LICENSE) © Albert Martinez. Not affiliated with X Corp.

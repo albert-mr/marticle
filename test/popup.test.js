@@ -9,9 +9,10 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 async function popup({ url = article.source, extraction = article, clipboard = true } = {}) {
   const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'https://extension.example/popup.html', runScripts: 'outside-only' });
-  const state = { writes: [], downloads: [], injected: false };
+  const state = { writes: [], downloads: [], tabs: [], injected: false };
   dom.window.chrome = {
-    tabs: { query: async () => [{ id: 7, url }] },
+    tabs: { query: async () => [{ id: 7, url }], create: async ({ url }) => state.tabs.push(url) },
+    runtime: { getURL: path => `chrome-extension://abc/${path}` },
     scripting: { executeScript: async ({ target }) => { assert.equal(target.tabId, 7); state.injected = true; return [{ result: extraction }]; } },
   };
   Object.defineProperty(dom.window.navigator, 'clipboard', { value: { writeText: async text => {
@@ -48,6 +49,16 @@ test('saves the article as a .md file named after the title', async () => {
   } finally { p.close(); }
 });
 
+test('opens the print page with the Markdown in the hash', async () => {
+  const p = await popup();
+  try {
+    await p.click('#pdf');
+    const [url] = p.state.tabs;
+    assert.match(url, /^chrome-extension:\/\/abc\/print\.html#/);
+    assert.equal(decodeURIComponent(url.split('#')[1]), article.markdown);
+  } finally { p.close(); }
+});
+
 test('falls back to a selectable preview when the clipboard is blocked', async () => {
   const p = await popup({ clipboard: false });
   try {
@@ -66,6 +77,7 @@ test('shows the extraction error and offers a retry', async () => {
     assert.equal(p.$('#copy').textContent, 'Try again');
     assert.equal(p.$('#copy').disabled, false);
     assert.equal(p.$('#save').disabled, true);
+    assert.equal(p.$('#pdf').disabled, true);
     assert.equal(p.$('#preview').value, '');
   } finally { p.close(); }
 });
