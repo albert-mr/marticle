@@ -1,7 +1,7 @@
 import { extractArticle } from './extract.js';
 
 const $ = selector => document.querySelector(selector);
-const title = $('#title'), status = $('#status'), copyButton = $('#copy'), saveButton = $('#save'), pdfButton = $('#pdf'), warnings = $('#warnings'), preview = $('#preview');
+const eyebrow = $('.eyebrow'), title = $('#title'), status = $('#status'), copyButton = $('#copy'), saveButton = $('#save'), pdfButton = $('#pdf'), warnings = $('#warnings'), preview = $('#preview');
 let article;
 
 function show(message, error = false) {
@@ -15,20 +15,24 @@ async function load() {
   copyButton.disabled = saveButton.disabled = pdfButton.disabled = true;
   copyButton.textContent = 'Copy as Markdown';
   copyButton.classList.remove('done');
-  title.textContent = 'Reading article…';
+  eyebrow.textContent = 'X';
+  title.textContent = 'Reading…';
   show('');
   warnings.hidden = true;
   preview.value = '';
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const host = tab?.url ? new URL(tab.url).hostname : '';
-    if (!/^(www\.|mobile\.)?(x|twitter)\.com$/.test(host)) throw new Error('Open an article on x.com, then click Marticle again.');
+    if (!/^(www\.|mobile\.)?(x|twitter)\.com$/.test(host)) throw new Error('Open a post or article on x.com, then click Marticle again.');
     const [response] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractArticle });
     const result = response?.result;
     if (!result?.ok) throw new Error(result?.error || 'The page returned nothing. Reload it and try again.');
     article = result;
-    const { words, images, embeds } = article.stats;
-    const stats = [`${Math.max(1, Math.round(words / 200))} min read`, plural(images, 'image'), plural(embeds, 'embedded post')].filter(Boolean).join(' · ');
+    const { words, images, embeds, posts } = article.stats;
+    const isArticle = article.kind === 'article';
+    const stats = [isArticle ? `${Math.max(1, Math.round(words / 200))} min read` : plural(posts > 1 && posts, 'post'),
+      plural(images, 'image'), plural(embeds, isArticle ? 'embedded post' : 'quoted post')].filter(Boolean).join(' · ');
+    eyebrow.textContent = `X ${article.kind}`;
     title.textContent = article.title;
     show([article.author, stats].filter(Boolean).join('\n'));
     preview.value = article.markdown;
@@ -58,7 +62,7 @@ async function copy() {
 }
 
 function save() {
-  const name = article.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'article';
+  const name = article.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || article.kind;
   const link = Object.assign(document.createElement('a'), { download: `${name}.md`,
     href: URL.createObjectURL(new Blob([article.markdown], { type: 'text/markdown' })) });
   link.click();

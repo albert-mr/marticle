@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
-const article = { ok: true, title: 'Test article: draft/final?', author: 'Alice @alice', markdown: '# Test article\n\nContent\n', source: 'https://x.com/alice/status/123', stats: { words: 3, images: 1, embeds: 0 }, warnings: ['A table uses merged cells; its Markdown layout is simplified.'] };
+const article = { ok: true, kind: 'article', title: 'Test article: draft/final?', author: 'Alice @alice', markdown: '# Test article\n\nContent\n', source: 'https://x.com/alice/status/123', stats: { words: 3, images: 1, embeds: 0 }, warnings: ['A table uses merged cells; its Markdown layout is simplified.'] };
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 
 async function popup({ url = article.source, extraction = article, clipboard = true } = {}) {
@@ -87,5 +87,16 @@ test('does not inject into tabs that are not on X', async () => {
   try {
     assert.equal(p.state.injected, false);
     assert.match(p.$('#status').textContent, /x\.com/);
+  } finally { p.close(); }
+});
+
+test('labels a thread and counts its posts instead of reading time', async () => {
+  const thread = { ...article, kind: 'thread', title: '1/ Thread start', markdown: 'By Alice @alice\n\n1/ Thread start\n', stats: { words: 40, images: 0, embeds: 1, posts: 3 }, warnings: [] };
+  const p = await popup({ extraction: thread });
+  try {
+    assert.equal(p.$('.eyebrow').textContent, 'X thread');
+    assert.equal(p.$('#status').textContent, 'Alice @alice\n3 posts · 1 quoted post');
+    await p.click('#save');
+    assert.deepEqual(p.state.downloads, ['1 Thread start.md']);
   } finally { p.close(); }
 });

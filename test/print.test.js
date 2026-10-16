@@ -106,3 +106,18 @@ test('explains itself instead of printing an empty page', async () => {
     assert.equal(p.$('#title').textContent, '');
   } finally { p.close(); }
 });
+
+test('lays out a post without a title as a Post, keeps its line breaks and does not mistake its text for metadata', async () => {
+  const p = await page('By Alice @alice\n\nPublished: 2026-09-19T10:00:00Z\n\nSource: https://x.com/alice/status/123\n\nBy the way.\n\nline one\nline two\n\n---\n\nsecond post\n');
+  try {
+    assert.equal(p.$('#title').hidden, true);
+    assert.equal(p.$('.brand span').textContent, 'Post');
+    assert.equal(p.dom.window.document.title, 'Alice on X');
+    assert.equal(p.$('#name').textContent, 'Alice');
+    assert.match(p.$('#byline').textContent, /^@alice · .*2026$/);
+    const body = p.$('#body');
+    assert.match(body.textContent, /By the way\./);
+    assert.ok(body.querySelector('br'), 'single newline becomes a hard break');
+    assert.ok(body.querySelector('hr'), 'posts are separated by a rule');
+  } finally { p.close(); }
+});

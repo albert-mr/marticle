@@ -4,7 +4,7 @@
 
 <h1 align="center">Marticle</h1>
 
-<p align="center"><strong>Copy that.</strong> One click turns any X Article into clean Markdown, or a PDF.</p>
+<p align="center"><strong>Copy that.</strong> One click turns any X post, thread or Article into clean Markdown, or a PDF.</p>
 
 <p align="center">
   <a href="https://github.com/albert-mr/marticle/actions/workflows/test.yml"><img src="https://github.com/albert-mr/marticle/actions/workflows/test.yml/badge.svg" alt="tests"></a>
@@ -14,14 +14,14 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" width="320" alt="Marticle popup: reading the article, then Copy as Markdown, then Copied">
+  <img src="assets/demo.gif" width="320" alt="Marticle popup: reading the post, then Copy as Markdown, then Copied">
 </p>
 
 ## Why
 
-X Articles are long, often good, and stuck inside X. Screenshots throw away the text. Select-all drags the sidebar along.
-A link is useless to a model that can't open it. Marticle grabs the actual article, keeps the formatting, and puts Markdown
-on your clipboard. Paste it into Claude, ChatGPT, Obsidian, or a plain text file.
+Good things on X are stuck inside X. Screenshots throw away the text. Select-all drags the sidebar along. A link is
+useless to a model that can't open it. Marticle grabs the actual post, thread or Article, keeps the formatting, and puts
+Markdown on your clipboard. Paste it into Claude, ChatGPT, Obsidian, or a plain text file.
 
 ## Install
 
@@ -35,33 +35,37 @@ Works in any Chromium browser: Chrome, Brave, Edge, Arc.
 
 ## Use
 
-Open an article on x.com and click Marticle.
+Open a post, a thread or an article on x.com (click a post's date to open it in its own tab) and click Marticle.
 
-- **Copy as Markdown** puts the article on your clipboard.
+- **Copy as Markdown** puts it on your clipboard.
 - **⤓** saves it as a `.md` file named after the title.
-- **PDF** opens the article in a print-ready X-style layout and Chrome's print dialog. Pick **Save as PDF** as the
+- **PDF** opens it in a print-ready X-style layout and Chrome's print dialog. Pick **Save as PDF** as the
   destination (and untick *Headers and footers* once; Chrome remembers both).
 - **Preview** shows exactly what you'll get.
 
 ## What you get
 
-- Title, author, publish date, and source URL at the top
-- Headings, bold, italic, strikethrough, links, quotes, lists, code blocks, tables, and math
-- Images as direct full-resolution URLs with alt text and captions
-- Embedded posts as quoted blocks with attribution and links
-- Videos as links. Nothing is transcribed or invented.
-- PDF: the same content laid out like an X Article, with the title, author, date, images and clickable links.
+- Author, publish date, and source URL at the top (plus the title, for articles)
+- **Posts**: the text with its line breaks, links, hashtags and emoji; images as direct full-resolution URLs; videos as a
+  thumbnail plus a link; quoted posts as quoted blocks; polls and link cards as text
+- **Threads**: the post you opened plus every post the same author added around it, separated by rules. A reply also
+  carries the post it answers as a quoted block.
+- **Articles**: headings, bold, italic, strikethrough, links, quotes, lists, code blocks, tables, math, images with alt
+  text and captions, embedded posts
+- Nothing is transcribed or invented; videos stay links.
+- PDF: the same content laid out like an X post or Article, with the author, date, images and clickable links.
 
-Marticle copies what the page has loaded. If X hasn't finished rendering the article, wait a moment and click **Try again**.
+Marticle copies what the page has loaded. If X hasn't finished rendering, or a long post shows **Show more**, or a thread
+continues below the fold, scroll or click there and then click **Try again**.
 Image links don't attach the actual images to an AI chat; upload those separately when the model needs to see them.
 
 ## Privacy
 
-Marticle reads the current tab only when you click it, converts the article in memory, and hands you the result.
-It makes no network requests of its own and stores nothing. The PDF view loads the article's images from X's image
-servers, exactly as x.com does, so Chrome can print them.
+Marticle reads the current tab only when you click it, converts the page in memory, and hands you the result.
+It makes no network requests of its own and stores nothing. The PDF view loads images from X's image servers, exactly
+as x.com does, so Chrome can print them.
 
-Permissions: `activeTab` and `scripting` to read the open article, `clipboardWrite` to copy it.
+Permissions: `activeTab` and `scripting` to read the open page, `clipboardWrite` to copy it.
 
 ## Development
 
@@ -70,7 +74,7 @@ npm ci
 npm test
 ```
 
-The extractor is `extension/extract.js`, one self-contained function that Chrome injects into the article tab.
+The extractor is `extension/extract.js`, one self-contained function that Chrome injects into the X tab.
 The popup is `extension/popup.js`. The PDF view is `extension/print.js`, which renders the Markdown with a vendored
 copy of [marked](https://github.com/markedjs/marked) (`npm run vendor` refreshes it). Tests run against fixture DOMs
 in jsdom. Pull requests welcome.

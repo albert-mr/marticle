@@ -15,7 +15,7 @@ if (hash) {
 $('#print').addEventListener('click', () => window.print());
 
 if (!markdown.trim()) {
-  hint.textContent = 'Nothing to print. Open an article on x.com and click Marticle → PDF.';
+  hint.textContent = 'Nothing to print. Open a post or article on x.com and click Marticle → PDF.';
   $('.article').hidden = true;
 } else {
   render(parse(markdown));
@@ -24,7 +24,8 @@ if (!markdown.trim()) {
   window.print();
 }
 
-// extract.js writes "# Title", "By …", "Published: …", "Source: …" as the leading blocks, in that order.
+// extract.js writes "# Title" (articles only), "By …", "Published: …", "Source: …" as the leading blocks, in that
+// order; Source is always last, so parsing stops there before a post that begins "By the way" is read as a byline.
 function parse(text) {
   const blocks = text.replace(/\r\n?/g, '\n').split(/\n{2,}/);
   const meta = { title: '', author: '', published: '', source: '' };
@@ -33,14 +34,12 @@ function parse(text) {
     const found = fields.find(([, pattern]) => pattern.test(blocks[0].trim()));
     if (!found) break;
     meta[found[0]] = blocks.shift().trim().match(found[1])[1];
+    if (found[0] === 'source') break;
   }
   return { ...meta, body: blocks.join('\n\n') };
 }
 
 function render({ title, author, published, source, body }) {
-  $('#title').innerHTML = marked.parseInline(title) || 'Untitled';
-  document.title = $('#title').textContent;
-
   const [, name, handle] = author.match(/^(.*?)\s*(@\S+)?$/);
   const date = published && (Number.isNaN(Date.parse(published)) ? published
     : new Date(published).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }));
@@ -48,8 +47,15 @@ function render({ title, author, published, source, body }) {
   $('#byline').textContent = [name && handle, date].filter(Boolean).join(' · ');
   $('#avatar').textContent = $('#name').textContent.replace(/^@/, '').charAt(0).toUpperCase();
 
+  // Posts have no title: hide the heading and label the page as a post.
+  $('.brand span').textContent = title ? 'Article' : 'Post';
+  $('#title').hidden = !title;
+  $('#title').innerHTML = marked.parseInline(title);
+  document.title = $('#title').textContent || `${$('#name').textContent} on X`;
+
   const container = $('#body');
-  container.innerHTML = marked.parse(body);
+  // breaks: a lone newline is a hard break, which is all extract.js ever emits one for (<br>, post line breaks).
+  container.innerHTML = marked.parse(body, { breaks: true });
   // The Markdown was escaped by extract.js, so this is belt and braces: extension CSP already blocks inline scripts.
   container.querySelectorAll('script, style, iframe, object, embed, link, meta, base, form').forEach(el => el.remove());
   for (const el of container.querySelectorAll('*')) {

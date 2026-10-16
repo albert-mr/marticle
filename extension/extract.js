@@ -8,32 +8,31 @@ export function extractArticle() {
   const warnings = new Set();
   const images = new Set();
   let embeds = 0;
-  const source = `${location.origin}${location.pathname}`;
+  const source = `${location.origin}${location.pathname.replace(/(\/status\/\d+).*/, '$1')}`;
   const isX = ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com'].includes(location.hostname);
   const fail = (error) => ({ ok: false, error, source });
   if (!isX) {
-    return fail('Open an X article first.');
+    return fail('Open a post or an article on X first.');
   }
   const bodySelector = '[data-testid="twitterArticleRichTextView"], [data-testid="twitterArticleRichText"]';
   const visible = (el) => !el.closest('[hidden], [aria-hidden="true"]') &&
     ![el, ...ancestors(el)].some(x => x.style?.display === 'none' || x.style?.visibility === 'hidden');
+  let titleEl, authorMeta, context;
   const candidates = [...document.querySelectorAll(bodySelector)].filter(visible);
-  if (candidates.length !== 1) {
-    return fail(candidates.length ? 'More than one article is open. Open the article in its own tab.' :
-      'No full article found. Open the article (not its preview), wait for it to load, and retry.');
-  }
+  if (candidates.length > 1) return fail('More than one article is open. Open the article in its own tab.');
+  if (!candidates.length) return post();
   const body = candidates[0];
   const readView = body.closest('[data-testid="twitterArticleReadView"]') || body;
-  const context = readView.closest('article') || readView;
+  context = readView.closest('article') || readView;
   if (body.closest('[aria-busy="true"]') || body.querySelector('[role="progressbar"], [aria-busy="true"]')) {
     return fail('The article is still loading. Wait and retry.');
   }
-  const titleEl = readView.querySelector('[data-testid="twitter-article-title"]') || context.querySelector('h1');
+  titleEl = readView.querySelector('[data-testid="twitter-article-title"]') || context.querySelector('h1');
   const title = titleEl?.textContent.trim();
   if (!title) return fail('The article title is missing. Wait for the article to load and retry.');
   const byline = [...context.querySelectorAll('[data-testid="User-Name"]')].find(el => !body.contains(el));
-  const name = byline ? [...byline.querySelectorAll('a')].map(x => x.textContent.trim()).filter(Boolean) : [];
-  const authorMeta = [...context.querySelectorAll('[itemprop="author"]')].find(el => !body.contains(el) || el.parentElement === body);
+  const name = who(byline);
+  authorMeta = [...context.querySelectorAll('[itemprop="author"]')].find(el => !body.contains(el) || el.parentElement === body);
   if (!name.length && authorMeta) {
     const n = authorMeta.querySelector('[itemprop="name"]')?.getAttribute('content');
     const h = authorMeta.querySelector('[itemprop="additionalName"]')?.getAttribute('content');
@@ -54,8 +53,70 @@ export function extractArticle() {
   ].filter(Boolean).join('\n\n') + '\n';
   // ponytail: word count includes link URLs and Markdown syntax; close enough for a summary line.
   const words = content.split(/\s+/).filter(Boolean).length;
-  return { ok: true, title, author, source, markdown, stats: { words, images: images.size, embeds }, warnings: [...warnings] };
+  return { ok: true, kind: 'article', title, author, source, markdown, stats: { words, images: images.size, embeds }, warnings: [...warnings] };
 
+  // A status page: the focal post (tabindex -1, or the one whose date links to this URL) plus the run of
+  // same-author posts around it = the thread. The other-author post directly above the run is what it replies to.
+  function post() {
+    const id = location.pathname.match(/\/status\/(\d+)/)?.[1];
+    if (!id) return fail('Open a post in its own tab (click its date), or open an article.');
+    const articles = [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
+    const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
+    const permalink = (a) => [...a.querySelectorAll('a[href*="/status/"]')].find(x => x.querySelector('time') && !quoteOf(a)?.contains(x));
+    const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
+    const focal = articles.find(a => a.getAttribute('tabindex') === '-1') ||
+      articles.find(a => new RegExp(`/status/${id}(?:[/?#]|$)`).test(permalink(a)?.getAttribute('href') || ''));
+    if (!focal) return fail('The post is still loading. Wait and retry.');
+    const mine = handleOf(focal);
+    let start = articles.indexOf(focal), end = start;
+    while (mine && start > 0 && handleOf(articles[start - 1]) === mine) start--;
+    while (mine && end + 1 < articles.length && handleOf(articles[end + 1]) === mine) end++;
+    const thread = articles.slice(start, end + 1);
+    const parent = start > 0 ? articles[start - 1] : null;
+    const renderPost = (a) => {
+      const quote = quoteOf(a);
+      const parts = [...a.querySelectorAll('[data-testid="tweetText"], [data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="card.wrapper"], [data-testid="cardPoll"]'), ...(quote ? [quote] : [])]
+        .filter((el, _, all) => !all.some(other => other !== el && other.contains(el)))
+        .sort((x, y) => (x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+      return parts.map(el => (el === quote ? embedded(el) : render(el))).join('').trim();
+    };
+    const posts = thread.map(renderPost).filter(Boolean);
+    if (!posts.length) return fail('The post is empty or still loading. Wait and retry.');
+    if (thread.some(a => a.querySelector('[data-testid="tweet-text-show-more-link"]'))) warnings.add('A post is cut off. Click "Show more" on it and retry.');
+    if (thread.length > 1 && end === articles.length - 1) warnings.add('The thread may continue below. Scroll down and retry.');
+    const first = thread[0];
+    const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
+    const published = permalink(first)?.querySelector('time')?.getAttribute('datetime') || '';
+    const text = first.querySelector('[data-testid="tweetText"]')?.textContent.trim().split('\n')[0].trim();
+    const title = (text || `Post by ${author}`).slice(0, 100);
+    const content = posts.join('\n\n---\n\n');
+    const context = parent ? `In reply to:\n\n${embedded(parent).trim()}` : '';
+    if (parent) embeds--; // the post being answered is context, not a quote
+    const markdown = [
+      author ? `By ${escape(author)}` : '', published ? `Published: ${escape(published)}` : '', `Source: ${source}`, context, content,
+    ].filter(Boolean).join('\n\n') + '\n';
+    const words = content.split(/\s+/).filter(Boolean).length;
+    return { ok: true, kind: thread.length > 1 ? 'thread' : 'post', title, author, source, markdown,
+      stats: { words, images: images.size, embeds, posts: thread.length }, warnings: [...warnings] };
+  }
+  // "Name @handle" from a User-Name block: its links, or its leaf spans where X renders quoted bylines without links.
+  function who(el) {
+    if (!el) return [];
+    const links = [...el.querySelectorAll('a')].filter(a => !a.querySelector('time')).map(a => a.textContent.trim()).filter(Boolean);
+    const spans = [...el.querySelectorAll('span')].filter(s => !s.children.length && !s.closest('time')).map(s => s.textContent.trim()).filter(s => s && s !== '·');
+    return [...new Set(links.length ? links : spans)];
+  }
+  // Leaf texts of a card or poll, and the rows (label + percentage) they group into. Marticle can't see X's
+  // card internals, so this is structural: a row is an element whose children hold at most one text each.
+  function leaves(el) {
+    return [...(el.children.length ? el.querySelectorAll('*') : [el])].filter(x => !x.children.length)
+      .map(x => x.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  }
+  function rows(el) {
+    const kids = [...el.children];
+    // ponytail: poll rows come out as "Yes 60%"; pair them explicitly once the poll DOM is pinned down.
+    return kids.some(c => leaves(c).length > 1) ? kids.flatMap(c => (leaves(c).length > 1 ? rows(c) : [leaves(c).join(' ')])) : [leaves(el).join(' ')];
+  }
   function ancestors(el) {
     const out = [];
     for (let parent = el.parentElement; parent; parent = parent.parentElement) out.push(parent);
@@ -127,8 +188,7 @@ export function extractArticle() {
   }
   function embedded(el) {
     embeds++;
-    const by = el.querySelector('[data-testid="User-Name"]');
-    const attribution = by ? [...by.querySelectorAll('a')].map(a => a.textContent.trim()).filter(Boolean).join(' ') : 'Embedded post';
+    const attribution = who(el.querySelector('[data-testid="User-Name"]')).join(' ') || 'Embedded post';
     const permalink = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href')))
       .find(h => /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//.test(h));
     const statusLink = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href')))
@@ -141,13 +201,16 @@ export function extractArticle() {
       content = children(clone).trim();
       if (!content) warnings.add('An embedded post has no loaded text; its available link/media were retained.');
     }
-    const media = [...el.querySelectorAll('img')].map(renderImage).filter(Boolean).join('\n\n');
-    const href = statusLink || permalink;
+    const media = [...el.querySelectorAll('img, [data-testid="videoPlayer"]')].map(x => (x.tagName === 'IMG' ? renderImage(x) : render(x).trim())).filter(Boolean).join('\n\n');
+    const handle = attribution.match(/@(\w{1,15})/)?.[1];
+    const href = statusLink || permalink || (handle ? `https://x.com/${handle}` : '');
     const quote = [href ? `[${escape(attribution)}](${destination(href)})` : escape(attribution), content, media].filter(Boolean).join('\n\n');
-    return quote.split('\n').map(line => `> ${line}`).join('\n') + '\n\n';
+    return quote.split('\n').map(line => (line ? `> ${line}` : '>')).join('\n') + '\n\n';
   }
   function render(node) {
     if (node.nodeType === 3) {
+      // Post text is white-space: pre-wrap on X; its line breaks are content.
+      if (node.parentElement?.closest('[data-testid="tweetText"]')) return escape(node.nodeValue.replace(/[\t ]+/g, ' '));
       if (!node.nodeValue.trim() && /[\r\n]/.test(node.nodeValue)) return '';
       return escape(node.nodeValue.replace(/[\t\r\n ]+/g, ' '));
     }
@@ -155,10 +218,17 @@ export function extractArticle() {
     const el = node;
     const tag = el.tagName;
     const id = el.getAttribute('data-testid');
-    if (el === titleEl || el === authorMeta || /^(SCRIPT|STYLE|NOSCRIPT|SVG|BUTTON|INPUT|TEXTAREA|FORM|NAV|IFRAME)$/.test(tag) ||
+    if (el === titleEl || el === authorMeta || id === 'tweet-text-show-more-link' || /^(SCRIPT|STYLE|NOSCRIPT|SVG|BUTTON|INPUT|TEXTAREA|FORM|NAV|IFRAME)$/.test(tag) ||
       el.matches('[hidden], [aria-hidden="true"]') || el.style.display === 'none') return '';
-    if (el.matches('[role="button"]') && !el.matches('[data-testid="tweetPhoto"], [data-testid="simpleTweet"], [data-testid="videoPlayer"]') &&
+    if (el.matches('[role="button"]') && !el.matches('[data-testid="tweetPhoto"], [data-testid="simpleTweet"], [data-testid="videoPlayer"], [data-testid="card.wrapper"], [data-testid="cardPoll"]') &&
       !el.querySelector('img, video, [data-testid="simpleTweet"], [data-testid="videoPlayer"]')) return '';
+    if (id === 'tweetText') return block(children(el).replace(/[\t ]+\n/g, '\n'));
+    if (id === 'cardPoll') return block(rows(el).filter(Boolean).map(row => `- ${escape(row)}`).join('\n'));
+    if (id === 'card.wrapper') {
+      const href = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href'))).find(Boolean);
+      const label = escape(leaves(el).join(' · ')) || (href && escape(href));
+      return label ? block(href ? `[${label}](${destination(href)})` : label) : '';
+    }
     if (id === 'simpleTweet' || (id === 'tweet' && el !== context)) return embedded(el);
     if (id === 'markdown-code-block') {
       const code = el.querySelector('pre code') || el.querySelector('pre');
@@ -175,7 +245,8 @@ export function extractArticle() {
       const video = tag === 'VIDEO' ? el : el.querySelector('video');
       const raw = video?.getAttribute('src') || video?.querySelector('source')?.getAttribute('src');
       const href = (raw && url(raw)) || source;
-      return block(`[Watch video](${destination(href)})`);
+      const poster = video?.getAttribute('poster') && url(video.getAttribute('poster'));
+      return (poster ? block(`![Video](${destination(poster)})`) : '') + block(`[Watch video](${destination(href)})`);
     }
     if (tag === 'IMG') return /\/emoji\//.test(el.getAttribute('src') || '') ? renderImage(el) : block(renderImage(el));
     if (tag === 'BR') return '\n';
