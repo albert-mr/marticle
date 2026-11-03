@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 
-async function extract(html) {
-  const dom = new JSDOM(html, { url: 'https://x.com/alice/status/123?s=tracking', runScripts: 'outside-only' });
+async function extract(html, { url = 'https://x.com/alice/status/123?s=tracking', setup } = {}) {
+  const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
   const source = await readFile(new URL('../extension/extract.js', import.meta.url), 'utf8').catch(() => '');
-  dom.window.eval(source.replace('export function', 'function'));
+  dom.window.eval(source.replace(/export (async )?function/, '$1function'));
   assert.equal(typeof dom.window.extractArticle, 'function', 'article extractor must exist');
-  try { return dom.window.extractArticle(); } finally { dom.window.close(); }
+  const after = setup?.(dom.window);
+  try { return Object.assign(await dom.window.extractArticle(), after?.()); } finally { dom.window.close(); }
 }
 
 const page = (body) => `<main><article>
@@ -206,9 +207,97 @@ test('finds the focal post by its date link when nothing is focused, and reports
   assert.match(loading.error, /loading/i);
   const dom = new JSDOM(`<main>${post({ focal: true, body: text('<span>Hi</span>') })}</main>`, { url: 'https://x.com/alice', runScripts: 'outside-only' });
   const source = await readFile(new URL('../extension/extract.js', import.meta.url), 'utf8');
-  dom.window.eval(source.replace('export function', 'function'));
-  const profile = dom.window.extractArticle();
+  dom.window.eval(source.replace(/export (async )?function/, '$1function'));
+  const profile = await dom.window.extractArticle();
   dom.window.close();
   assert.equal(profile.ok, false);
   assert.match(profile.error, /own tab/i);
+});
+
+test('carries the whole reply chain as context, each post with its own quote', async () => {
+  const result = await extract(`<main>
+    ${post({ id: '90', body: text('<span>Root question</span>') })}
+    ${post({ handle: 'bob', name: 'Bob', id: '100', body: `${text('<span>Bob answers</span>')}
+      <div role="link" tabindex="0"><div data-testid="User-Name"><span>Dana</span><span>@dana</span></div>${text('<span>Dana said</span>')}</div>` })}
+    ${post({ id: '123', focal: true, body: text('<span>Alice again</span>') })}
+  </main>`);
+  assert.match(result.markdown, /In reply to:\n\n> \[Alice @alice\]\(<https:\/\/x\.com\/alice\/status\/90>\)\n>\n> Root question\n\n> \[Bob @bob\]\(<https:\/\/x\.com\/bob\/status\/100>\)\n>\n> Bob answers\n>\n> > \[Dana @dana\]\(<https:\/\/x\.com\/dana>\)\n> >\n> > Dana said\n\nAlice again\n$/);
+  assert.equal(result.kind, 'post');
+  assert.equal(result.stats.embeds, 0, 'quotes inside the context are not quoted posts of this one');
+});
+
+test('links a quoted post through its photo and warns when X cut its text off', async () => {
+  const result = await extract(`<main>${post({ focal: true, body: `${text('<span>Interesting</span>')}
+    <div role="link" tabindex="0"><div data-testid="User-Name"><span>Rikiya</span><span>@rikiya</span></div>
+      ${text('<span>We asked a model to edit weights.\n...</span>')}
+      <a href="/rikiya/status/777/photo/1">${photo('paper', 'Paper')}</a></div>` })}</main>`);
+  assert.match(result.markdown, /> \[Rikiya @rikiya\]\(<https:\/\/x\.com\/rikiya\/status\/777>\)/);
+  assert.ok(result.warnings.some(x => /quoted post/i.test(x) && /cut off/i.test(x)));
+  assert.ok(!result.warnings.some(x => /Click "Show more"/.test(x)));
+  const whole = await extract(`<main>${post({ focal: true, body: `${text('<span>Hi</span>')}
+    <div role="link"><div data-testid="User-Name"><span>Dana</span><span>@dana</span></div>${text('<span>Complete.</span>')}</div>` })}</main>`);
+  assert.deepEqual([...whole.warnings], []);
+});
+
+// X virtualizes the conversation: only cells near the viewport are in the DOM, positioned with translateY.
+function timeline(cells, { height = 500, at = 0 } = {}) {
+  return (window) => {
+    const { document } = window;
+    let y = at;
+    const view = 1000, total = cells.length * height;
+    Object.defineProperty(window, 'scrollY', { get: () => y, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: view, configurable: true });
+    Object.defineProperty(document.documentElement, 'scrollHeight', { get: () => total, configurable: true });
+    const draw = () => {
+      const from = Math.max(0, Math.floor(y / height) - 1), to = Math.min(cells.length - 1, Math.floor((y + view) / height) + 1);
+      document.querySelector('main').innerHTML = cells.slice(from, to + 1)
+        .map((html, i) => html.replace('data-testid="cellInnerDiv"', `data-testid="cellInnerDiv" style="transform: translateY(${(from + i) * height}px)"`)).join('');
+    };
+    window.scrollTo = (_, top) => { y = Math.max(0, Math.min(total - view, top)); draw(); };
+    draw();
+    return () => ({ scrolledBackTo: y });
+  };
+}
+
+test('scrolls through a virtualized thread to collect every post, then puts the page back', async () => {
+  const cells = [
+    post({ handle: 'bob', name: 'Bob', id: '100', body: text('<span>Question</span>') }),
+    ...Array.from({ length: 10 }, (_, i) => post({ id: String(120 + i), focal: i === 3, body: text(`<span>${i + 1}/ part</span>`) })),
+    post({ handle: 'carol', name: 'Carol', id: '200', body: text('<span>Great thread</span>') }),
+  ];
+  const result = await extract('<main></main>', { setup: timeline(cells, { at: 1500 }) });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.kind, 'thread');
+  assert.equal(result.stats.posts, 10);
+  assert.match(result.markdown, /> Question\n\n1\/ part\n\n---\n\n2\/ part[\s\S]*9\/ part\n\n---\n\n10\/ part\n$/);
+  assert.doesNotMatch(result.markdown, /Great thread/);
+  assert.deepEqual([...result.warnings], []);
+  assert.equal(result.scrolledBackTo, 1500);
+});
+
+test('finds a focal post that X unmounted after the reader scrolled past it', async () => {
+  const cells = Array.from({ length: 8 }, (_, i) => post({ handle: i ? 'carol' : 'alice', name: 'X', id: String(123 + i), focal: !i, body: text(`<span>Reply ${i}</span>`) }));
+  const result = await extract('<main></main>', { setup: timeline(cells, { at: 2500 }) });
+  assert.equal(result.ok, true, result.error);
+  assert.match(result.markdown, /Reply 0\n$/);
+  assert.equal(result.scrolledBackTo, 2500);
+});
+
+test('reads the whole reply chain from the top without skipping posts between the top and where the reader was', async () => {
+  const cells = [
+    ...Array.from({ length: 6 }, (_, i) => post({ handle: `u${i}`, name: `U${i}`, id: String(10 + i), body: text(`<span>Ancestor ${i}</span>`) })),
+    post({ focal: true, body: text('<span>My reply</span>') }),
+    ...Array.from({ length: 3 }, (_, i) => post({ handle: 'dave', name: 'Dave', id: String(300 + i), body: text('<span>Later reply</span>') })),
+  ];
+  const result = await extract('<main></main>', { setup: timeline(cells, { at: 3000 }) });
+  assert.match(result.markdown, /Ancestor 0[\s\S]*Ancestor 1[\s\S]*Ancestor 2[\s\S]*Ancestor 3[\s\S]*Ancestor 4[\s\S]*Ancestor 5[\s\S]*My reply\n$/);
+  assert.equal(result.scrolledBackTo, 3000);
+});
+
+test('sends the quotes, reposts and likes lists back to the post instead of scrolling them', async () => {
+  for (const tab of ['quotes', 'retweets', 'likes']) {
+    const result = await extract(`<main>${post({ handle: 'bob', id: '9', body: text('<span>A quote</span>') })}</main>`, { url: `https://x.com/alice/status/123/${tab}` });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /post itself/i);
+  }
 });

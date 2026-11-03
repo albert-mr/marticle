@@ -3,8 +3,9 @@
  */
 
 // Self-contained: Chrome serializes this function into the selected tab's
-// isolated world. No page globals, credentials, API calls, or persistent hooks.
-export function extractArticle() {
+// isolated world. No page globals, credentials, API calls, or persistent hooks. To read a long
+// thread it may scroll the page, and it puts the scroll position back.
+export async function extractArticle() {
   const warnings = new Set();
   const images = new Set();
   let embeds = 0;
@@ -56,23 +57,35 @@ export function extractArticle() {
   return { ok: true, kind: 'article', title, author, source, markdown, stats: { words, images: images.size, embeds }, warnings: [...warnings] };
 
   // A status page: the focal post (tabindex -1, or the one whose date links to this URL) plus the run of
-  // same-author posts around it = the thread. The other-author post directly above the run is what it replies to.
-  function post() {
+  // same-author posts around it = the thread. Every post above the run is the conversation it replies to.
+  async function post() {
     const id = location.pathname.match(/\/status\/(\d+)/)?.[1];
     if (!id) return fail('Open a post in its own tab (click its date), or open an article.');
-    const articles = [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
+    if (/\/status\/\d+\/(?:quotes|retweets|reposts|likes)/.test(location.pathname)) return fail('This is a list of other posts. Open the post itself and retry.');
     const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
     const permalink = (a) => [...a.querySelectorAll('a[href*="/status/"]')].find(x => x.querySelector('time') && !quoteOf(a)?.contains(x));
     const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
-    const focal = articles.find(a => a.getAttribute('tabindex') === '-1') ||
-      articles.find(a => new RegExp(`/status/${id}(?:[/?#]|$)`).test(permalink(a)?.getAttribute('href') || ''));
+    const live = () => [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
+    const locate = (list) => {
+      const focal = list.find(a => a.getAttribute('tabindex') === '-1') ||
+        list.find(a => new RegExp(`/status/${id}(?:[/?#]|$)`).test(permalink(a)?.getAttribute('href') || ''));
+      const mine = focal ? handleOf(focal) : '';
+      let start = list.indexOf(focal), end = start;
+      while (mine && start > 0 && handleOf(list[start - 1]) === mine) start--;
+      while (mine && end + 1 < list.length && handleOf(list[end + 1]) === mine) end++;
+      return { focal, start, end };
+    };
+    // X unmounts cells far from the viewport (each is positioned with translateY). One snapshot is enough unless the
+    // focal post is gone, cells above were unmounted, or the thread runs into the last loaded post.
+    let articles = live(), { focal, start, end } = locate(articles), partial = false;
+    const firstTop = Number(articles[0]?.closest('[data-testid="cellInnerDiv"]')?.style.transform.match(/translateY\(([\d.]+)px\)/)?.[1]) || 0;
+    const fromTop = !focal || (window.scrollY > 0 && (start === 0 || firstTop > 0));
+    if (fromTop || end === articles.length - 1) {
+      articles = await sweep(fromTop);
+      ({ focal, start, end } = locate(articles));
+    }
     if (!focal) return fail('The post is still loading. Wait and retry.');
-    const mine = handleOf(focal);
-    let start = articles.indexOf(focal), end = start;
-    while (mine && start > 0 && handleOf(articles[start - 1]) === mine) start--;
-    while (mine && end + 1 < articles.length && handleOf(articles[end + 1]) === mine) end++;
-    const thread = articles.slice(start, end + 1);
-    const parent = start > 0 ? articles[start - 1] : null;
+    const thread = articles.slice(start, end + 1), ancestors = articles.slice(0, start);
     const renderPost = (a) => {
       const quote = quoteOf(a);
       const parts = [...a.querySelectorAll('[data-testid="tweetText"], [data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="card.wrapper"], [data-testid="cardPoll"]'), ...(quote ? [quote] : [])]
@@ -80,24 +93,71 @@ export function extractArticle() {
         .sort((x, y) => (x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
       return parts.map(el => (el === quote ? embedded(el) : render(el))).join('').trim();
     };
+    const quoted = embeds;
+    const context = ancestors.map(a => cite(who(a.querySelector('[data-testid="User-Name"]')).join(' ') || (handleOf(a) ? `@${handleOf(a)}` : 'Post'),
+      url(permalink(a)?.getAttribute('href') || ''), renderPost(a))).join('');
+    embeds = quoted; // quotes inside the conversation above belong to those posts, not this one
     const posts = thread.map(renderPost).filter(Boolean);
     if (!posts.length) return fail('The post is empty or still loading. Wait and retry.');
-    if (thread.some(a => a.querySelector('[data-testid="tweet-text-show-more-link"]'))) warnings.add('A post is cut off. Click "Show more" on it and retry.');
-    if (thread.length > 1 && end === articles.length - 1) warnings.add('The thread may continue below. Scroll down and retry.');
-    const first = thread[0];
+    if ([...ancestors, ...thread].some(a => [...a.querySelectorAll('[data-testid="tweet-text-show-more-link"]')].some(x => !quoteOf(a)?.contains(x)))) {
+      warnings.add('A post is cut off. Click "Show more" on it and retry.');
+    }
+    if (partial) warnings.add('The thread may continue below. Scroll down and retry.');
+    const mine = handleOf(focal), first = thread[0];
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
     const published = permalink(first)?.querySelector('time')?.getAttribute('datetime') || '';
     const text = first.querySelector('[data-testid="tweetText"]')?.textContent.trim().split('\n')[0].trim();
     const title = (text || `Post by ${author}`).slice(0, 100);
     const content = posts.join('\n\n---\n\n');
-    const context = parent ? `In reply to:\n\n${embedded(parent).trim()}` : '';
-    if (parent) embeds--; // the post being answered is context, not a quote
     const markdown = [
-      author ? `By ${escape(author)}` : '', published ? `Published: ${escape(published)}` : '', `Source: ${source}`, context, content,
+      author ? `By ${escape(author)}` : '', published ? `Published: ${escape(published)}` : '', `Source: ${source}`,
+      context && `In reply to:\n\n${context.trim()}`, content,
     ].filter(Boolean).join('\n\n') + '\n';
     const words = content.split(/\s+/).filter(Boolean).length;
     return { ok: true, kind: thread.length > 1 ? 'thread' : 'post', title, author, source, markdown,
       stats: { words, images: images.size, embeds, posts: thread.length }, warnings: [...warnings] };
+
+    // Scroll (from the top when needed) in 80%-of-a-screen steps, keeping a clone of every post by status id in page
+    // order, until another author's post closes the thread or the page ends. The reader's scroll position is restored.
+    async function sweep(top) {
+      const home = window.scrollY, order = [], seen = new Map();
+      const keyOf = (a) => permalink(a)?.getAttribute('href').match(/\/status\/(\d+)/)?.[1] || a.textContent;
+      const snap = () => {
+        let at = -1, added = 0;
+        for (const a of live()) {
+          const key = keyOf(a);
+          if (!seen.has(key)) { order.splice(at + 1, 0, key); added++; }
+          seen.set(key, a.cloneNode(true));
+          at = order.indexOf(key);
+        }
+        return added;
+      };
+      const list = () => order.map(key => seen.get(key));
+      try {
+        // Collect only from where the sweep starts: a snapshot taken lower down would leave a gap above it.
+        if (top && window.scrollY > 0) { window.scrollTo(0, 0); await settle(); }
+        // ponytail: 60 screens caps a sweep at ~30 s; the warning tells the reader to scroll and retry past that.
+        for (let step = 0; step < 60; step++) {
+          const added = snap(), now = locate(list());
+          if (now.focal && now.end < order.length - 1) return list();
+          const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+          if (bottom && !added && step) return list();
+          if (!bottom) window.scrollTo(0, window.scrollY + window.innerHeight * 0.8);
+          await settle();
+        }
+        partial = true;
+        return list();
+      } finally {
+        if (window.scrollY !== home) window.scrollTo(0, home);
+      }
+    }
+    // Half a second for X to render, longer while its loading spinner (outside any post) is up; 3 s at most.
+    async function settle() {
+      for (let waited = 0; waited < 3000; waited += 100) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (waited >= 400 && ![...document.querySelectorAll('[role="progressbar"]')].some(x => !x.closest('article'))) return;
+      }
+    }
   }
   // "Name @handle" from a User-Name block: its links, or its leaf spans where X renders quoted bylines without links.
   function who(el) {
@@ -189,10 +249,10 @@ export function extractArticle() {
   function embedded(el) {
     embeds++;
     const attribution = who(el.querySelector('[data-testid="User-Name"]')).join(' ') || 'Embedded post';
-    const permalink = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href')))
-      .find(h => /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//.test(h));
-    const statusLink = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href')))
-      .find(h => /\/(?:status|article)\/\d+(?:[?#]|$)/.test(h));
+    const links = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href')));
+    const permalink = links.find(h => /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//.test(h));
+    // A quoted post's own link is often only on its photo (/status/<id>/photo/1).
+    const statusLink = links.map(h => h.match(/^https:\/\/[^/]+\/\w+\/(?:status|article)\/\d+(?=$|[?#]|\/(?:photo|video)\/)/)?.[0]).find(Boolean);
     const text = el.querySelector('[data-testid="tweetText"]');
     let content = text ? children(text).trim() : '';
     if (!text) {
@@ -201,10 +261,17 @@ export function extractArticle() {
       content = children(clone).trim();
       if (!content) warnings.add('An embedded post has no loaded text; its available link/media were retained.');
     }
+    // ponytail: X trims long quoted posts with "…"; a post that really ends in "..." also trips this, it's only a warning.
+    if (el.querySelector('[data-testid="tweet-text-show-more-link"]') || /(?:…|\.\.\.)$/.test(text?.textContent.trim() || '')) {
+      warnings.add('A quoted post may be cut off on X. Open it and copy it on its own for the full text.');
+    }
     const media = [...el.querySelectorAll('img, [data-testid="videoPlayer"]')].map(x => (x.tagName === 'IMG' ? renderImage(x) : render(x).trim())).filter(Boolean).join('\n\n');
     const handle = attribution.match(/@(\w{1,15})/)?.[1];
-    const href = statusLink || permalink || (handle ? `https://x.com/${handle}` : '');
-    const quote = [href ? `[${escape(attribution)}](${destination(href)})` : escape(attribution), content, media].filter(Boolean).join('\n\n');
+    return cite(attribution, statusLink || permalink || (handle ? `https://x.com/${handle}` : ''), [content, media].filter(Boolean).join('\n\n'));
+  }
+  // A Markdown blockquote: linked byline, then the body.
+  function cite(label, href, body) {
+    const quote = [href ? `[${escape(label)}](${destination(href)})` : escape(label), body].filter(Boolean).join('\n\n');
     return quote.split('\n').map(line => (line ? `> ${line}` : '>')).join('\n') + '\n\n';
   }
   function render(node) {
