@@ -48,20 +48,23 @@ Open a post, a thread or an article on x.com (click a post's date to open it in 
 - Author, publish date, and source URL at the top (plus the title, for articles)
 - **Posts**: the text with its line breaks, links, hashtags and emoji; images as direct full-resolution URLs; videos as a
   thumbnail plus a link; quoted posts as quoted blocks; polls and link cards as text
-- **Threads**: the post you opened plus every post the same author added around it, separated by rules. A reply also
-  carries the post it answers as a quoted block.
+- **Threads**: the post you opened plus every post the same author added around it, separated by rules. X only keeps
+  the posts near your screen on the page, so for a long thread Marticle scrolls through it, collects every post, and
+  puts the page back where it was.
+- **Replies**: the whole conversation above them, each post as a quoted block with its own quoted post nested inside
 - **Articles**: headings, bold, italic, strikethrough, links, quotes, lists, code blocks, tables, math, images with alt
   text and captions, embedded posts
 - Nothing is transcribed or invented; videos stay links.
 - PDF: the same content laid out like an X post or Article, with the author, date, images and clickable links.
 
-Marticle copies what the page has loaded. If X hasn't finished rendering, or a long post shows **Show more**, or a thread
-continues below the fold, scroll or click there and then click **Try again**.
+Marticle copies what X shows. If a long post shows **Show more**, click it and then click **Try again**. X shortens long
+quoted posts with "…" and Marticle warns when it sees one: open the quoted post and copy it on its own for the full text.
 Image links don't attach the actual images to an AI chat; upload those separately when the model needs to see them.
 
 ## Privacy
 
-Marticle reads the current tab only when you click it, converts the page in memory, and hands you the result.
+Marticle reads the current tab only when you click it, converts the page in memory, and hands you the result. To read a
+long thread it may scroll the page, then scrolls it back.
 It makes no network requests of its own and stores nothing. The PDF view loads images from X's image servers, exactly
 as x.com does, so Chrome can print them.
 
