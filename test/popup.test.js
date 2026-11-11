@@ -3,17 +3,17 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
-const article = { ok: true, kind: 'article', title: 'Test article: draft/final?', author: 'Alice @alice', markdown: '# Test article\n\nContent\n', source: 'https://x.com/alice/status/123', stats: { words: 3, images: 1, embeds: 0 }, warnings: ['A table uses merged cells; its Markdown layout is simplified.'] };
+const article = { ok: true, kind: 'article', title: 'Test article: draft/final?', author: 'Alice @alice', markdown: '# Test article\n\nContent\n', source: 'https://x.com/alice/status/123', stats: { words: 3, images: 1, embeds: 0 }, warnings: ['A table has merged cells, so its layout is simplified.'] };
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 
-async function popup({ url = article.source, extraction = article, clipboard = true } = {}) {
+async function popup({ url = article.source, extraction = article, clipboard = true, delay = 0 } = {}) {
   const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'https://extension.example/popup.html', runScripts: 'outside-only' });
   const state = { writes: [], downloads: [], tabs: [], injected: false };
   dom.window.chrome = {
     tabs: { query: async () => [{ id: 7, url }], create: async ({ url }) => state.tabs.push(url) },
     runtime: { getURL: path => `chrome-extension://abc/${path}` },
-    scripting: { executeScript: async ({ target }) => { assert.equal(target.tabId, 7); state.injected = true; return [{ result: extraction }]; } },
+    scripting: { executeScript: async ({ target }) => { assert.equal(target.tabId, 7); state.injected = true; await new Promise(resolve => setTimeout(resolve, delay)); return [{ result: extraction }]; } },
   };
   Object.defineProperty(dom.window.navigator, 'clipboard', { value: { writeText: async text => {
     if (!clipboard) throw new Error('denied');
@@ -32,9 +32,13 @@ async function popup({ url = article.source, extraction = article, clipboard = t
 test('copies the article as Markdown', async () => {
   const p = await popup();
   try {
+    assert.equal(p.$('#kind').textContent, 'Article');
     assert.equal(p.$('#title').textContent, article.title);
     assert.equal(p.$('#status').textContent, 'Alice @alice\n1 min read · 1 image');
     assert.equal(p.$('#warnings').hidden, false);
+    assert.equal(p.$('#warnings li').textContent, article.warnings[0]);
+    assert.equal(p.$('#card').hasAttribute('aria-busy'), false);
+    assert.equal(p.$(':focus'), p.$('#copy'), 'Enter should copy as soon as the popup has read the page');
     await p.click('#copy');
     assert.deepEqual(p.state.writes, [article.markdown]);
     assert.match(p.$('#copy').textContent, /Copied/);
@@ -76,8 +80,9 @@ test('shows the extraction error and offers a retry', async () => {
     assert.match(p.$('#status').textContent, /No full article/);
     assert.equal(p.$('#copy').textContent, 'Try again');
     assert.equal(p.$('#copy').disabled, false);
-    assert.equal(p.$('#save').disabled, true);
-    assert.equal(p.$('#pdf').disabled, true);
+    assert.equal(p.$('#save').hidden, true);
+    assert.equal(p.$('#pdf').hidden, true);
+    assert.equal(p.$('details').hidden, true);
     assert.equal(p.$('#preview').value, '');
   } finally { p.close(); }
 });
@@ -87,6 +92,7 @@ test('does not inject into tabs that are not on X', async () => {
   try {
     assert.equal(p.state.injected, false);
     assert.match(p.$('#status').textContent, /x\.com/);
+    assert.equal(p.$('.actions').hidden, true, 'nothing to retry on a page that is not X');
   } finally { p.close(); }
 });
 
@@ -94,9 +100,22 @@ test('labels a thread and counts its posts instead of reading time', async () =>
   const thread = { ...article, kind: 'thread', title: '1/ Thread start', markdown: 'By Alice @alice\n\n1/ Thread start\n', stats: { words: 40, images: 0, embeds: 1, posts: 3 }, warnings: [] };
   const p = await popup({ extraction: thread });
   try {
-    assert.equal(p.$('.eyebrow').textContent, 'X thread');
+    assert.equal(p.$('#kind').textContent, 'Thread');
     assert.equal(p.$('#status').textContent, 'Alice @alice\n3 posts · 1 quoted post');
     await p.click('#save');
     assert.deepEqual(p.state.downloads, ['1 Thread start.md']);
+  } finally { p.close(); }
+});
+
+test('explains the scrolling while a long thread is collected, then shows the result', async () => {
+  const p = await popup({ delay: 1300 });
+  try {
+    assert.equal(p.$('#card').getAttribute('aria-busy'), 'true');
+    assert.equal(p.$('#copy').disabled, true);
+    await new Promise(resolve => setTimeout(resolve, 1230));
+    assert.match(p.$('#status').textContent, /Collecting the whole thread/);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(p.$('#status').textContent, 'Alice @alice\n1 min read · 1 image');
+    assert.equal(p.$('#copy').disabled, false);
   } finally { p.close(); }
 });
