@@ -63,12 +63,16 @@ export async function extractArticle() {
     if (!id) return fail('Open a post in its own tab (click its date), or open an article.');
     if (/\/status\/\d+\/(?:quotes|retweets|reposts|likes)/.test(location.pathname)) return fail('This is a list of other posts. Open the post itself and retry.');
     const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
-    const permalink = (a) => [...a.querySelectorAll('a[href*="/status/"]')].find(x => x.querySelector('time') && !quoteOf(a)?.contains(x));
+    const permalink = (a) => {
+      const quote = quoteOf(a);
+      return [...a.querySelectorAll('a[href*="/status/"]')].find(x => x.querySelector('time') && !quote?.contains(x));
+    };
     const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
     const live = () => [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
+    const here = new RegExp(`/status/${id}(?:[/?#]|$)`);
     const locate = (list) => {
       const focal = list.find(a => a.getAttribute('tabindex') === '-1') ||
-        list.find(a => new RegExp(`/status/${id}(?:[/?#]|$)`).test(permalink(a)?.getAttribute('href') || ''));
+        list.find(a => here.test(permalink(a)?.getAttribute('href') || ''));
       const mine = focal ? handleOf(focal) : '';
       let start = list.indexOf(focal), end = start;
       while (mine && start > 0 && handleOf(list[start - 1]) === mine) start--;
@@ -107,7 +111,7 @@ export async function extractArticle() {
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
     const published = permalink(first)?.querySelector('time')?.getAttribute('datetime') || '';
     const text = first.querySelector('[data-testid="tweetText"]')?.textContent.trim().split('\n')[0].trim();
-    const title = (text || `Post by ${author}`).slice(0, 100);
+    const title = [...(text || `Post by ${author}`)].slice(0, 100).join(''); // by code point: never half an emoji
     const content = posts.join('\n\n---\n\n');
     const markdown = [
       author ? `By ${escape(author)}` : '', published ? `Published: ${escape(published)}` : '', `Source: ${source}`,
@@ -135,7 +139,7 @@ export async function extractArticle() {
       const list = () => order.map(key => seen.get(key));
       try {
         // Collect only from where the sweep starts: a snapshot taken lower down would leave a gap above it.
-        if (top && window.scrollY > 0) { window.scrollTo(0, 0); await settle(); }
+        if (top && window.scrollY > 0) { window.scrollTo(0, 0); await settle(500); }
         // ponytail: 60 screens caps a sweep at ~30 s; the warning tells the reader to scroll and retry past that.
         for (let step = 0; step < 60; step++) {
           const added = snap(), now = locate(list());
@@ -143,7 +147,8 @@ export async function extractArticle() {
           const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
           if (bottom && !added && step) return list();
           if (!bottom) window.scrollTo(0, window.scrollY + window.innerHeight * 0.8);
-          await settle();
+          // The page's end is where a late spinner would cut the thread short, so it gets the full half second.
+          await settle(bottom ? 500 : 150);
         }
         partial = true;
         return list();
@@ -151,11 +156,23 @@ export async function extractArticle() {
         if (window.scrollY !== home) window.scrollTo(0, home);
       }
     }
-    // Half a second for X to render, longer while its loading spinner (outside any post) is up; 3 s at most.
-    async function settle() {
-      for (let waited = 0; waited < 3000; waited += 100) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        if (waited >= 400 && ![...document.querySelectorAll('[role="progressbar"]')].some(x => !x.closest('article'))) return;
+    // Wait until X has added no nodes for `quiet` ms (half a second at most), longer while its loading spinner
+    // (outside any post) is up; 3 s at most. The spinner has no aria-valuenow; the reply box's upload bar is a
+    // progressbar too, always there with aria-valuenow="0", and must not count.
+    // ponytail: 150 ms of quiet is a guess at X's render cadence; raise it at the call site if sweeps skip posts.
+    async function settle(quiet) {
+      const began = Date.now();
+      let changed = began;
+      const observer = new MutationObserver(() => { changed = Date.now(); });
+      observer.observe(document.body, { childList: true, subtree: true });
+      try {
+        while (Date.now() - began < 3000) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          const now = Date.now();
+          if ((now - changed >= quiet || now - began >= 500) && ![...document.querySelectorAll('[role="progressbar"]:not([aria-valuenow])')].some(x => !x.closest('article'))) return;
+        }
+      } finally {
+        observer.disconnect();
       }
     }
   }
@@ -183,7 +200,8 @@ export async function extractArticle() {
     return out;
   }
   function escape(text) {
-    return String(text).replace(/[\\`*_[\]<>|#!]/g, '\\$&');
+    // Also "~~" (strikethrough) and a line of only - or = (a rule, or a heading out of the line above it).
+    return String(text).replace(/[\\`*_[\]<>|#!]|~(?=~)|(?<=~)~/g, '\\$&').replace(/^[-=]{2,}[ \t]*$/gm, '\\$&');
   }
   function url(value) {
     try {

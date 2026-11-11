@@ -83,6 +83,14 @@ test('strips scripts, inline handlers and non-http URLs from the body', async ()
   } finally { p.close(); }
 });
 
+test('cleans the title and the author name like the body', async () => {
+  const p = await page('# Hi <img src="x" onerror="bad()"><a href="javascript:alert(1)">t</a>\n\nBy <script>bad()</script>Al @al\n\nSource: https://x.com/al/status/1\n\nText');
+  try {
+    assert.equal(p.$('.article [onerror], .article script, .article a[href^="javascript"], .article img[src="x"]'), null);
+    assert.equal(p.$('#title').textContent, 'Hi t');
+  } finally { p.close(); }
+});
+
 test('prints once the images have loaded, keeps the Markdown for a reload and drops the hash', async () => {
   const p = await page();
   try {

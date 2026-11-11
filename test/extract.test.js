@@ -158,6 +158,16 @@ test('copies a single post with line breaks, links, media and metadata and no ti
   assert.deepEqual({ ...result.stats }, { words: result.stats.words, images: 1, embeds: 0, posts: 1 });
 });
 
+test('keeps literal ~~ and --- lines in a post from turning into strikethrough, rules or headings', async () => {
+  const result = await extract(`<main>${post({ focal: true, body: text('<span>Big news\n---\n~~not struck~~ and ~5 min, a-b\n===</span>') })}</main>`);
+  assert.match(result.markdown, /Big news\n\\---\n\\~\\~not struck\\~\\~ and ~5 min, a-b\n\\===\n/);
+});
+
+test('cuts a long post title between characters, never inside one', async () => {
+  const result = await extract(`<main>${post({ focal: true, body: text(`<span>${'𝗯'.repeat(150)}</span>`) })}</main>`);
+  assert.equal(result.title, '𝗯'.repeat(100));
+});
+
 test('unrolls a thread: same-author posts around the focal one, with the other-author parent as reply context', async () => {
   const html = `<main>
     ${post({ handle: 'bob', name: 'Bob', id: '100', time: '2026-09-19T09:00:00Z', body: text('<span>The original question</span>') })}
@@ -265,7 +275,11 @@ test('scrolls through a virtualized thread to collect every post, then puts the 
     ...Array.from({ length: 10 }, (_, i) => post({ id: String(120 + i), focal: i === 3, body: text(`<span>${i + 1}/ part</span>`) })),
     post({ handle: 'carol', name: 'Carol', id: '200', body: text('<span>Great thread</span>') }),
   ];
-  const result = await extract('<main></main>', { setup: timeline(cells, { at: 1500 }) });
+  // The reply box's upload bar is a progressbar that never goes away; it is not X's loading spinner.
+  const began = Date.now();
+  const result = await extract('<div data-testid="inline_reply_offscreen"><div role="progressbar" aria-valuenow="0" aria-valuemax="100"></div></div><main></main>',
+    { setup: timeline(cells, { at: 1500 }) });
+  assert.ok(Date.now() - began < 4000, 'the sweep waited on the reply box as if the page were loading');
   assert.equal(result.ok, true, result.error);
   assert.equal(result.kind, 'thread');
   assert.equal(result.stats.posts, 10);

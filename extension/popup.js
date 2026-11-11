@@ -62,7 +62,7 @@ async function copy() {
 }
 
 function save() {
-  const name = article.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || article.kind;
+  const name = [...article.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()].slice(0, 80).join('') || article.kind;
   const link = Object.assign(document.createElement('a'), { download: `${name}.md`,
     href: URL.createObjectURL(new Blob([article.markdown], { type: 'text/markdown' })) });
   link.click();
