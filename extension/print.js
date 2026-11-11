@@ -43,40 +43,48 @@ function render({ title, author, published, source, body }) {
   const [, name, handle] = author.match(/^(.*?)\s*(@\S+)?$/);
   const date = published && (Number.isNaN(Date.parse(published)) ? published
     : new Date(published).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }));
-  $('#name').innerHTML = marked.parseInline(name || handle || 'Unknown author');
+  $('#name').replaceChildren(safe(marked.parseInline(name || handle || 'Unknown author')));
   $('#byline').textContent = [name && handle, date].filter(Boolean).join(' · ');
   $('#avatar').textContent = $('#name').textContent.replace(/^@/, '').charAt(0).toUpperCase();
 
   // Posts have no title: hide the heading and label the page as a post.
   $('.brand span').textContent = title ? 'Article' : 'Post';
   $('#title').hidden = !title;
-  $('#title').innerHTML = marked.parseInline(title);
+  $('#title').replaceChildren(safe(marked.parseInline(title)));
   document.title = $('#title').textContent || `${$('#name').textContent} on X`;
 
-  const container = $('#body');
   // breaks: a lone newline is a hard break, which is all extract.js ever emits one for (<br>, post line breaks).
-  container.innerHTML = marked.parse(body, { breaks: true });
-  // The Markdown was escaped by extract.js, so this is belt and braces: extension CSP already blocks inline scripts.
-  container.querySelectorAll('script, style, iframe, object, embed, link, meta, base, form').forEach(el => el.remove());
-  for (const el of container.querySelectorAll('*')) {
-    for (const { name: attr } of [...el.attributes]) if (/^on/i.test(attr)) el.removeAttribute(attr);
-    for (const attr of ['href', 'src', 'srcset']) {
-      if (el.hasAttribute(attr) && !/^https?:\/\//i.test(el.getAttribute(attr).trim())) el.removeAttribute(attr);
-    }
-  }
-  container.querySelectorAll('img:not([src])').forEach(el => el.remove());
-  for (const img of container.querySelectorAll('img')) {
-    // ponytail: "large" is 2048px, plenty for an A4 column and several times smaller than "orig".
-    img.src = img.src.replace(/^(https:\/\/pbs\.twimg\.com\/media\/[^?]+\?[^#]*?\bname=)orig\b/, '$1large');
-    img.addEventListener('error', () => img.replaceWith(Object.assign(document.createElement('a'),
-      { href: img.src, className: 'broken', textContent: `Image unavailable: ${img.src}` })), { once: true });
-  }
+  $('#body').replaceChildren(safe(marked.parse(body, { breaks: true })));
 
   if (source) {
     $('#source').href = source;
     $('#source').textContent = source;
     $('#foot').hidden = false;
   }
+}
+
+// Parse into an inert <template>: nothing loads or runs until the cleaned nodes are attached, so each image is
+// fetched once, at its final URL. The Markdown was escaped by extract.js and the extension CSP already blocks
+// inline scripts, so the stripping is belt and braces.
+function safe(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const root = template.content;
+  root.querySelectorAll('script, style, iframe, object, embed, link, meta, base, form').forEach(el => el.remove());
+  for (const el of root.querySelectorAll('*')) {
+    for (const { name: attr } of [...el.attributes]) if (/^on/i.test(attr)) el.removeAttribute(attr);
+    for (const attr of ['href', 'src', 'srcset']) {
+      if (el.hasAttribute(attr) && !/^https?:\/\//i.test(el.getAttribute(attr).trim())) el.removeAttribute(attr);
+    }
+  }
+  root.querySelectorAll('img:not([src])').forEach(el => el.remove());
+  for (const img of root.querySelectorAll('img')) {
+    // ponytail: "large" is 2048px, plenty for an A4 column and several times smaller than "orig".
+    img.setAttribute('src', img.getAttribute('src').trim().replace(/^(https:\/\/pbs\.twimg\.com\/media\/[^?]+\?[^#]*?\bname=)orig\b/, '$1large'));
+    img.addEventListener('error', () => img.replaceWith(Object.assign(document.createElement('a'),
+      { href: img.src, className: 'broken', textContent: `Image unavailable: ${img.src}` })), { once: true });
+  }
+  return root;
 }
 
 // Print preview snapshots the page, so wait for the images; a stalled CDN gets 15 seconds, not forever.
