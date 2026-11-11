@@ -1,19 +1,19 @@
-/* Chrome's own look, shared by the popup and the PDF page: its Material palette in light and dark,
-   13px system type, pill buttons. */
+/* Chrome's own dark look, shared by the popup and the PDF page: its Material palette, 13px system type, pill
+   buttons. Dark only, whatever the system theme. */
 :root {
-  color-scheme: light dark;
-  --surface: light-dark(#fff, #1f1f1f);
-  --raised: light-dark(#f2f5fb, #2a2b2e);
-  --text: light-dark(#1f1f1f, #e3e3e3);
-  --subtle: light-dark(#5f6368, #b4b7bb);
-  --outline: light-dark(#c7c7c7, #5e5e5e);
-  --primary: light-dark(#0b57d0, #a8c7fa);
-  --on-primary: light-dark(#fff, #062e6f);
-  --ok: light-dark(#146c2e, #6dd58c);
-  --on-ok: light-dark(#fff, #0a3818);
-  --warn-surface: light-dark(#fef7e0, #3a2f14);
-  --warn: light-dark(#5f4500, #fdd663);
-  --error: light-dark(#b3261e, #f2b8b5);
+  color-scheme: dark;
+  --surface: #1f1f1f;
+  --raised: #2a2b2e;
+  --text: #e3e3e3;
+  --subtle: #b4b7bb;
+  --outline: #5e5e5e;
+  --primary: #a8c7fa;
+  --on-primary: #062e6f;
+  --ok: #6dd58c;
+  --on-ok: #0a3818;
+  --warn-surface: #3a2f14;
+  --warn: #fdd663;
+  --error: #f2b8b5;
 }
 * { box-sizing: border-box; }
 body { margin: 0; font: 13px/20px system-ui, sans-serif; color: var(--text); background: var(--surface); }

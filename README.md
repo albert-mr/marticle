@@ -44,7 +44,7 @@ or press `Alt+Shift+M` (change it at `chrome://extensions/shortcuts`).
   destination (and turn off *Headers and footers* once; Chrome remembers both).
 - **Preview** shows exactly what you'll get.
 
-The popup looks like the rest of Chrome and follows your light or dark theme.
+The popup and the PDF page are dark, in Chrome's own style. The PDF itself is always a white page.
 
 ## What you get
 
