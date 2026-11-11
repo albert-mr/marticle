@@ -1,0 +1,31 @@
+/* Chrome's own dark look, shared by the popup and the PDF page: its Material palette, 13px system type, pill
+   buttons. Dark only, whatever the system theme. */
+:root {
+  color-scheme: dark;
+  --surface: #1f1f1f;
+  --raised: #2a2b2e;
+  --text: #e3e3e3;
+  --subtle: #b4b7bb;
+  --outline: #5e5e5e;
+  --primary: #a8c7fa;
+  --on-primary: #062e6f;
+  --ok: #6dd58c;
+  --on-ok: #0a3818;
+  --warn-surface: #3a2f14;
+  --warn: #fdd663;
+  --error: #f2b8b5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px/20px system-ui, sans-serif; color: var(--text); background: var(--surface); }
+svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border: 1px solid var(--outline); border-radius: 18px;
+  font: inherit; font-weight: 500; white-space: nowrap; color: var(--primary); background: none; cursor: pointer; transition: background-color .15s, box-shadow .15s; }
+button:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+button:active { background: color-mix(in srgb, var(--primary) 14%, transparent); }
+button.primary { border-color: transparent; color: var(--on-primary); background: var(--primary); }
+button.primary:hover { background: color-mix(in srgb, var(--primary) 90%, var(--on-primary)); box-shadow: 0 1px 2px rgb(0 0 0 / .3); }
+button.primary:active { background: color-mix(in srgb, var(--primary) 84%, var(--on-primary)); box-shadow: none; }
+button:disabled { opacity: .38; pointer-events: none; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

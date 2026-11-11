@@ -1,43 +1,51 @@
-/* X Article look, print-first: white page, 600px column, system sans. */
+/* The PDF is a white sheet on a dark canvas, as in Chrome's PDF viewer: the page around it is dark, the sheet and
+   what gets printed are always white. Quiet, black-and-white layout: 15px text in a 600px column. */
 @page { size: A4; margin: 20mm 0 18mm; }
-* { box-sizing: border-box; }
-body { margin: 0; background: #fff; color: #0f1419; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+body { background: #131314; }
 .avatar, code, pre, blockquote { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-.bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-bottom: 1px solid #eff3f4; font-size: 14px; color: #536471; }
-.bar img { width: 20px; height: 20px; border-radius: 5px; }
-.bar button { margin-left: auto; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: #0f1419; color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
-.bar button:hover { background: #272c30; }
-@media print { .bar { display: none; } }
+.bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px; color: var(--subtle); background: var(--surface); box-shadow: 0 1px 0 rgb(255 255 255 / .1); }
+.bar img { width: 20px; height: 20px; }
+.bar b { margin-right: 8px; font-size: 14px; font-weight: 500; color: var(--text); }
+.bar button { margin-left: auto; }
 
-.article { max-width: 600px; margin: 0 auto; padding: 32px 16px 48px; }
-@media print { .article { padding: 0 16px; } }
-.brand { display: flex; align-items: center; gap: 6px; margin-bottom: 28px; font-size: 13px; color: #536471; }
-.brand svg { width: 16px; height: 16px; fill: #0f1419; }
-h1 { margin: 0 0 20px; font-size: 31px; line-height: 36px; font-weight: 800; letter-spacing: -.3px; overflow-wrap: anywhere; }
-.author { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px solid #eff3f4; }
-.avatar { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: #1d9bf0; color: #fff; font-size: 20px; font-weight: 700; }
-.meta { font-size: 15px; line-height: 20px; }
-.meta b { display: block; }
-.meta span { color: #536471; }
+.article { max-width: 680px; margin: 24px auto 48px; padding: 48px 40px 44px; border-radius: 2px; color: #111; background: #fff; color-scheme: light;
+  box-shadow: 0 8px 32px rgb(0 0 0 / .5); -webkit-font-smoothing: antialiased;
+  font: 15px/24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+@media print {
+  /* The dark canvas would otherwise fill the page margins. */
+  :root { color-scheme: light; }
+  html, body { background: #fff; }
+  .bar { display: none; }
+  .article { max-width: 600px; margin: 0 auto; padding: 0 16px; border-radius: 0; box-shadow: none; }
+}
+.brand { display: flex; align-items: center; gap: 6px; margin-bottom: 20px; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; }
+.brand svg { width: 12px; height: 12px; fill: #111; stroke: none; }
+h1 { margin: 0 0 16px; font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.author { display: flex; align-items: center; gap: 10px; padding-bottom: 20px; margin-bottom: 24px; border-bottom: 1px solid #e6e8eb; }
+.avatar { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: #111; color: #fff; font-size: 14px; font-weight: 600; }
+.meta { font-size: 13px; line-height: 18px; }
+.meta b { display: block; font-size: 14px; font-weight: 600; }
+.meta span { color: #6b7280; }
 
-.body { font-size: 17px; line-height: 28px; overflow-wrap: anywhere; }
-.body p { margin: 0 0 20px; }
-.body h1, .body h2 { margin: 32px 0 12px; font-size: 23px; line-height: 28px; font-weight: 800; break-after: avoid; }
-.body h3, .body h4, .body h5, .body h6 { margin: 28px 0 10px; font-size: 19px; line-height: 24px; font-weight: 700; break-after: avoid; }
-.body img { display: block; width: 100%; height: auto; margin: 20px 0; border: 1px solid #cfd9de; border-radius: 16px; break-inside: avoid; }
-.body a { color: #1d9bf0; text-decoration: none; }
-.body blockquote { margin: 20px 0; padding: 0 0 0 16px; border-left: 4px solid #cfd9de; color: #536471; }
+.body { overflow-wrap: anywhere; }
+.body p { margin: 0 0 14px; }
+.body h1, .body h2 { margin: 28px 0 8px; font-size: 19px; line-height: 26px; font-weight: 700; letter-spacing: -.01em; break-after: avoid; }
+.body h3, .body h4, .body h5, .body h6 { margin: 22px 0 6px; font-size: 16px; line-height: 22px; font-weight: 600; break-after: avoid; }
+.body img { display: block; width: 100%; height: auto; margin: 18px 0; border: 1px solid #e6e8eb; border-radius: 10px; break-inside: avoid; }
+.body a { color: inherit; text-decoration: underline; text-decoration-color: #b6bcc4; text-underline-offset: 2px; }
+.body blockquote { margin: 18px 0; padding: 2px 0 2px 14px; border-left: 2px solid #111; color: #4b5563; }
+.body blockquote p:last-child { margin-bottom: 0; }
 .body blockquote img { margin: 12px 0; }
-.body ul, .body ol { margin: 0 0 20px; padding-left: 26px; }
-.body li { margin: 6px 0; }
-.body hr { margin: 28px 0; border: 0; border-top: 1px solid #eff3f4; }
-.body code { padding: 2px 5px; border-radius: 4px; background: #f7f9f9; font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.body pre { padding: 14px; border: 1px solid #eff3f4; border-radius: 12px; background: #f7f9f9; white-space: pre-wrap; overflow-wrap: anywhere; }
-.body pre code { padding: 0; background: none; }
-.body table { width: 100%; margin: 0 0 20px; border-collapse: collapse; font-size: 15px; }
-.body td, .body th { padding: 8px; border: 1px solid #eff3f4; text-align: left; vertical-align: top; }
-.body .broken { display: block; margin: 20px 0; color: #536471; font-size: 14px; }
-.foot { margin: 36px 0 0; padding-top: 16px; border-top: 1px solid #eff3f4; color: #536471; font-size: 13px; line-height: 18px; }
-.foot a { color: #1d9bf0; text-decoration: none; word-break: break-all; }
-[hidden] { display: none !important; }
+.body ul, .body ol { margin: 0 0 14px; padding-left: 22px; }
+.body li { margin: 4px 0; }
+.body hr { margin: 24px 0; border: 0; border-top: 1px solid #e6e8eb; }
+.body code { padding: 1px 5px; border-radius: 4px; background: #f3f4f6; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.body pre { margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: #f3f4f6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.body pre code { padding: 0; background: none; font-size: 12.5px; }
+.body table { width: 100%; margin: 0 0 14px; border-collapse: collapse; font-size: 13px; line-height: 20px; }
+.body td, .body th { padding: 6px 8px 6px 0; border-bottom: 1px solid #e6e8eb; text-align: left; vertical-align: top; }
+.body th { font-weight: 600; }
+.body .broken { display: block; margin: 18px 0; color: #6b7280; font-size: 13px; }
+.foot { margin: 32px 0 0; padding-top: 14px; border-top: 1px solid #e6e8eb; color: #6b7280; font-size: 11.5px; line-height: 16px; }
+.foot a { color: inherit; text-decoration: none; word-break: break-all; }

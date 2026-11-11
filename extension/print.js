@@ -15,12 +15,12 @@ if (hash) {
 $('#print').addEventListener('click', () => window.print());
 
 if (!markdown.trim()) {
-  hint.textContent = 'Nothing to print. Open a post or article on x.com and click Marticle → PDF.';
-  $('.article').hidden = true;
+  hint.textContent = 'Nothing to print. Open a post, thread or Article on x.com, click Marticle, then choose Save as PDF.';
+  $('.article').hidden = $('#print').hidden = true;
 } else {
   render(parse(markdown));
   await settled(document.images);
-  hint.textContent = 'In the print dialog choose “Save as PDF”. Untick “Headers and footers” for a clean page.';
+  hint.textContent = 'In the print dialog, set Destination to “Save as PDF”. For a clean page, turn off “Headers and footers”.';
   window.print();
 }
 

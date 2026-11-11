@@ -13,24 +13,24 @@ export async function extractArticle() {
   const isX = ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com'].includes(location.hostname);
   const fail = (error) => ({ ok: false, error, source });
   if (!isX) {
-    return fail('Open a post or an article on X first.');
+    return fail('Open a post, thread or Article on x.com first.');
   }
   const bodySelector = '[data-testid="twitterArticleRichTextView"], [data-testid="twitterArticleRichText"]';
   const visible = (el) => !el.closest('[hidden], [aria-hidden="true"]') &&
     ![el, ...ancestors(el)].some(x => x.style?.display === 'none' || x.style?.visibility === 'hidden');
   let titleEl, authorMeta, context;
   const candidates = [...document.querySelectorAll(bodySelector)].filter(visible);
-  if (candidates.length > 1) return fail('More than one article is open. Open the article in its own tab.');
+  if (candidates.length > 1) return fail('More than one Article is open. Open the one you want in its own tab.');
   if (!candidates.length) return post();
   const body = candidates[0];
   const readView = body.closest('[data-testid="twitterArticleReadView"]') || body;
   context = readView.closest('article') || readView;
   if (body.closest('[aria-busy="true"]') || body.querySelector('[role="progressbar"], [aria-busy="true"]')) {
-    return fail('The article is still loading. Wait and retry.');
+    return fail('The Article is still loading. Give it a moment, then try again.');
   }
   titleEl = readView.querySelector('[data-testid="twitter-article-title"]') || context.querySelector('h1');
   const title = titleEl?.textContent.trim();
-  if (!title) return fail('The article title is missing. Wait for the article to load and retry.');
+  if (!title) return fail('The Article’s title hasn’t loaded. Give it a moment, then try again.');
   const byline = [...context.querySelectorAll('[data-testid="User-Name"]')].find(el => !body.contains(el));
   const name = who(byline);
   authorMeta = [...context.querySelectorAll('[itemprop="author"]')].find(el => !body.contains(el) || el.parentElement === body);
@@ -45,7 +45,7 @@ export async function extractArticle() {
   const timeEl = [...context.querySelectorAll('time[datetime]')].find(el => !body.contains(el));
   const published = timeEl?.getAttribute('datetime') || '';
   const content = render(body).trim();
-  if (!content) return fail('The article body is empty. Wait for it to load and retry.');
+  if (!content) return fail('The Article’s text hasn’t loaded. Give it a moment, then try again.');
   const cover = [...readView.querySelectorAll('img')].filter(img => !body.contains(img)).map(renderImage).filter(Boolean).join('\n\n');
   const markdown = [
     `# ${escape(title)}`, author ? `By ${escape(author)}` : '',
@@ -60,8 +60,8 @@ export async function extractArticle() {
   // same-author posts around it = the thread. Every post above the run is the conversation it replies to.
   async function post() {
     const id = location.pathname.match(/\/status\/(\d+)/)?.[1];
-    if (!id) return fail('Open a post in its own tab (click its date), or open an article.');
-    if (/\/status\/\d+\/(?:quotes|retweets|reposts|likes)/.test(location.pathname)) return fail('This is a list of other posts. Open the post itself and retry.');
+    if (!id) return fail('Open a post in its own tab (click its date), or open an Article.');
+    if (/\/status\/\d+\/(?:quotes|retweets|reposts|likes)/.test(location.pathname)) return fail('This page lists other posts. Open the post itself, then try again.');
     const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
     const permalink = (a) => {
       const quote = quoteOf(a);
@@ -88,7 +88,7 @@ export async function extractArticle() {
       articles = await sweep(fromTop);
       ({ focal, start, end } = locate(articles));
     }
-    if (!focal) return fail('The post is still loading. Wait and retry.');
+    if (!focal) return fail('The post is still loading. Give it a moment, then try again.');
     const thread = articles.slice(start, end + 1), ancestors = articles.slice(0, start);
     const renderPost = (a) => {
       const quote = quoteOf(a);
@@ -102,11 +102,11 @@ export async function extractArticle() {
       url(permalink(a)?.getAttribute('href') || ''), renderPost(a))).join('');
     embeds = quoted; // quotes inside the conversation above belong to those posts, not this one
     const posts = thread.map(renderPost).filter(Boolean);
-    if (!posts.length) return fail('The post is empty or still loading. Wait and retry.');
+    if (!posts.length) return fail('The post is empty or still loading. Give it a moment, then try again.');
     if ([...ancestors, ...thread].some(a => [...a.querySelectorAll('[data-testid="tweet-text-show-more-link"]')].some(x => !quoteOf(a)?.contains(x)))) {
-      warnings.add('A post is cut off. Click "Show more" on it and retry.');
+      warnings.add('A post is cut off. Click "Show more" on it, then try again.');
     }
-    if (partial) warnings.add('The thread may continue below. Scroll down and retry.');
+    if (partial) warnings.add('The thread may continue further down. Scroll down, then try again.');
     const mine = handleOf(focal), first = thread[0];
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
     const published = permalink(first)?.querySelector('time')?.getAttribute('datetime') || '';
@@ -232,7 +232,7 @@ export async function extractArticle() {
     if (/\/emoji\//.test(raw)) return img.alt || '';
     if (/\/profile_images\/|\/hashflags\//.test(raw)) return '';
     let src = raw ? url(raw) : '';
-    if (!src) { warnings.add('An image has no usable URL. Scroll to it and retry.'); return '[Image unavailable]'; }
+    if (!src) { warnings.add('An image hasn’t loaded. Scroll to it, then try again.'); return '[Image unavailable]'; }
     const parsed = new URL(src);
     if (parsed.hostname === 'pbs.twimg.com' && parsed.pathname.startsWith('/media/')) {
       parsed.searchParams.set('name', 'orig');
@@ -258,7 +258,7 @@ export async function extractArticle() {
     const rows = [...el.querySelectorAll('tr')].map(tr => [...tr.children].filter(c => /^(TD|TH)$/.test(c.tagName))
       .map(c => children(c).trim().replace(/\n+/g, '<br>'))).filter(r => r.length);
     if (!rows.length) return '';
-    if (el.querySelector('[rowspan], [colspan]')) warnings.add('A table uses merged cells; its Markdown layout is simplified.');
+    if (el.querySelector('[rowspan], [colspan]')) warnings.add('A table has merged cells, so its layout is simplified.');
     const width = Math.max(...rows.map(r => r.length));
     if (!el.querySelector('tr th')) rows.unshift(Array(width).fill(''));
     rows.splice(1, 0, Array(width).fill('---'));
@@ -277,11 +277,11 @@ export async function extractArticle() {
       const clone = el.cloneNode(true);
       clone.querySelectorAll('[data-testid="User-Name"], img, time, button, svg, script, style').forEach(x => x.remove());
       content = children(clone).trim();
-      if (!content) warnings.add('An embedded post has no loaded text; its available link/media were retained.');
+      if (!content) warnings.add('An embedded post’s text hasn’t loaded. Its link and media are kept.');
     }
     // ponytail: X trims long quoted posts with "…"; a post that really ends in "..." also trips this, it's only a warning.
     if (el.querySelector('[data-testid="tweet-text-show-more-link"]') || /(?:…|\.\.\.)$/.test(text?.textContent.trim() || '')) {
-      warnings.add('A quoted post may be cut off on X. Open it and copy it on its own for the full text.');
+      warnings.add('A quoted post may be cut off. Open it and copy it on its own for the full text.');
     }
     const media = [...el.querySelectorAll('img, [data-testid="videoPlayer"]')].map(x => (x.tagName === 'IMG' ? renderImage(x) : render(x).trim())).filter(Boolean).join('\n\n');
     const handle = attribution.match(/@(\w{1,15})/)?.[1];
@@ -326,7 +326,7 @@ export async function extractArticle() {
       return tex ? (el.querySelector('math[display="block"]') ? `\n\n$$\n${tex}\n$$\n\n` : `$${tex}$`) : escape(el.textContent);
     }
     if (id === 'videoPlayer' || tag === 'VIDEO') {
-      warnings.add('Videos are linked; video/audio content is not transcribed.');
+      warnings.add('Videos are kept as links. Nothing in them is transcribed.');
       const video = tag === 'VIDEO' ? el : el.querySelector('video');
       const raw = video?.getAttribute('src') || video?.querySelector('source')?.getAttribute('src');
       const href = (raw && url(raw)) || source;

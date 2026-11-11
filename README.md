@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" width="320" alt="Marticle popup: reading the post, then Copy as Markdown, then Copied">
+  <img src="assets/demo.gif" width="380" alt="Marticle popup: reading the page, then the Article with Copy as Markdown, then Copied">
 </p>
 
 ## Why
@@ -35,13 +35,16 @@ Works in any Chromium browser: Chrome, Brave, Edge, Arc.
 
 ## Use
 
-Open a post, a thread or an article on x.com (click a post's date to open it in its own tab) and click Marticle.
+Open a post, a thread or an Article on x.com (click a post's date to open it in its own tab) and click Marticle,
+or press `Alt+Shift+M` (change it at `chrome://extensions/shortcuts`).
 
-- **Copy as Markdown** puts it on your clipboard.
-- **⤓** saves it as a `.md` file named after the title.
-- **PDF** opens it in a print-ready X-style layout and Chrome's print dialog. Pick **Save as PDF** as the
-  destination (and untick *Headers and footers* once; Chrome remembers both).
+- **Copy as Markdown** puts it on your clipboard. It is the default button, so Enter works too.
+- **Save as .md** downloads a file named after the title.
+- **Save as PDF…** opens a print-ready page laid out like X, and Chrome's print dialog. Pick **Save as PDF** as the
+  destination (and turn off *Headers and footers* once; Chrome remembers both).
 - **Preview** shows exactly what you'll get.
+
+The popup and the PDF page are dark, in Chrome's own style. The PDF itself is always a white page.
 
 ## What you get
 
@@ -57,7 +60,7 @@ Open a post, a thread or an article on x.com (click a post's date to open it in 
 - Nothing is transcribed or invented; videos stay links.
 - PDF: the same content laid out like an X post or Article, with the author, date, images and clickable links.
 
-Marticle copies what X shows. If a long post shows **Show more**, click it and then click **Try again**. X shortens long
+Marticle copies what X shows. If a long post shows **Show more**, click it, then open Marticle again. X shortens long
 quoted posts with "…" and Marticle warns when it sees one: open the quoted post and copy it on its own for the full text.
 Image links don't attach the actual images to an AI chat; upload those separately when the model needs to see them.
 
@@ -87,6 +90,6 @@ in jsdom. Pull requests welcome.
 The extraction and Markdown conversion were adapted from [X Article Export](https://github.com/everettjf/x-article-export-pdf) by everettjf (MIT).
 X's DOM structure was cross-checked against [Defuddle](https://github.com/kepano/defuddle)'s test fixtures.
 The PDF view renders Markdown with [marked](https://github.com/markedjs/marked) (MIT).
-The icon uses the public-domain [Markdown Mark](https://github.com/dcurtis/markdown-mark).
+The icon is a nod to the public-domain [Markdown Mark](https://github.com/dcurtis/markdown-mark).
 
 [MIT](LICENSE) © Albert Martinez. Not affiliated with X Corp.
