@@ -56,7 +56,7 @@ export async function extractArticle() {
   const words = content.split(/\s+/).filter(Boolean).length;
   return { ok: true, kind: 'article', title, author, source, markdown, stats: { words, images: images.size, embeds }, warnings: [...warnings] };
 
-  // A status page: the focal post (tabindex -1, or the one whose date links to this URL) plus the run of
+  // A status page: the focal post plus the run of
   // same-author posts around it = the thread. Every post above the run is the conversation it replies to.
   async function post() {
     const id = location.pathname.match(/\/status\/(\d+)/)?.[1];
@@ -65,14 +65,18 @@ export async function extractArticle() {
     const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
     const permalink = (a) => {
       const quote = quoteOf(a);
-      return [...a.querySelectorAll('a[href*="/status/"]')].find(x => x.querySelector('time') && !quote?.contains(x));
+      const links = [...a.querySelectorAll('a[href*="/status/"]')].filter(x => !quote?.contains(x));
+      return links.find(x => x.querySelector('time')) || links.find(x =>
+        x.origin === location.origin && /^\/\w+\/status\/\d+\/(?:photo|video)\/\d+\/?$/.test(x.pathname) &&
+        !x.closest('[data-testid="simpleTweet"], [data-testid="tweetText"], [data-testid="card.wrapper"]') &&
+        (x.matches('[data-testid="tweetPhoto"]') || x.querySelector('[data-testid="tweetPhoto"], [data-testid="videoPlayer"]')));
     };
     const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
     const live = () => [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
     const here = new RegExp(`/status/${id}(?:[/?#]|$)`);
     const locate = (list) => {
-      const focal = list.find(a => a.getAttribute('tabindex') === '-1') ||
-        list.find(a => here.test(permalink(a)?.getAttribute('href') || ''));
+      const focal = list.find(a => here.test(permalink(a)?.pathname || '')) ||
+        list.find(a => a.getAttribute('tabindex') === '-1');
       const mine = focal ? handleOf(focal) : '';
       let start = list.indexOf(focal), end = start;
       while (mine && start > 0 && handleOf(list[start - 1]) === mine) start--;
@@ -99,7 +103,7 @@ export async function extractArticle() {
     };
     const quoted = embeds;
     const context = ancestors.map(a => cite(who(a.querySelector('[data-testid="User-Name"]')).join(' ') || (handleOf(a) ? `@${handleOf(a)}` : 'Post'),
-      url(permalink(a)?.getAttribute('href') || ''), renderPost(a))).join('');
+      url(permalink(a)?.getAttribute('href').replace(/\/(?:photo|video)\/\d+.*$/, '') || ''), renderPost(a))).join('');
     embeds = quoted; // quotes inside the conversation above belong to those posts, not this one
     const posts = thread.map(renderPost).filter(Boolean);
     if (!posts.length) return fail('The post is empty or still loading. Give it a moment, then try again.');
@@ -109,7 +113,10 @@ export async function extractArticle() {
     if (partial) warnings.add('The thread may continue further down. Scroll down, then try again.');
     const mine = handleOf(focal), first = thread[0];
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
-    const published = permalink(first)?.querySelector('time')?.getAttribute('datetime') || '';
+    const firstQuote = quoteOf(first);
+    const published = (permalink(first)?.querySelector('time[datetime]') ||
+      [...first.querySelectorAll('time[datetime]')].find(el => !firstQuote?.contains(el) &&
+        !el.closest('[data-testid="simpleTweet"]')))?.getAttribute('datetime') || '';
     const text = first.querySelector('[data-testid="tweetText"]')?.textContent.trim().split('\n')[0].trim();
     const title = [...(text || `Post by ${author}`)].slice(0, 100).join(''); // by code point: never half an emoji
     const content = posts.join('\n\n---\n\n');

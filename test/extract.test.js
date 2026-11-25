@@ -224,6 +224,20 @@ test('finds the focal post by its date link when nothing is focused, and reports
   assert.match(profile.error, /own tab/i);
 });
 
+test('finds a post by its media link when its timestamp is unlinked', async () => {
+  const focal = post({ focal: true, body: `${text('Main post')}
+    <a href="/alice/status/123/photo/1">${photo('pic', 'Main photo')}</a>` })
+    .replace(' tabindex="-1"', '')
+    .replace(/<a href="\/alice\/status\/123">(<time.*?<\/time>)<\/a>/, '$1');
+  const result = await extract(`<main>${focal}
+    ${post({ handle: 'bob', name: 'Bob', id: '456', body: text('A reply') })}
+  </main>`);
+  assert.equal(result.kind, 'post');
+  assert.match(result.markdown, /Published: 2026-09-19T10:00:00Z/);
+  assert.match(result.markdown, /Main post[\s\S]*!\[Main photo\]/);
+  assert.doesNotMatch(result.markdown, /A reply/);
+});
+
 test('carries the whole reply chain as context, each post with its own quote', async () => {
   const result = await extract(`<main>
     ${post({ id: '90', body: text('<span>Root question</span>') })}
