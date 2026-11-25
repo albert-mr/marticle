@@ -75,9 +75,21 @@ export async function extractArticle() {
     const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
     const live = () => [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
     const here = new RegExp(`/status/${id}(?:[/?#]|$)`);
-    const locate = (list) => {
+    const requestedHandle = location.pathname.match(/^\/(\w+)\/status\//)?.[1]?.toLowerCase();
+    // The inline reply composer follows the focal post on status pages.
+    const aboveReplyComposer = (list) => {
+      const composers = [...document.querySelectorAll('[data-testid="primaryColumn"] [data-testid="tweetTextarea_0"]')]
+        .filter(el => visible(el) && !el.closest('[role="dialog"], article'));
+      if (composers.length !== 1) return;
+      const [composer] = composers;
+      const column = composer.closest('[data-testid="primaryColumn"]');
+      const candidate = list.findLast(a => column.contains(a) &&
+        (a.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING));
+      if (candidate && requestedHandle && handleOf(candidate) === requestedHandle && !permalink(candidate)) return candidate;
+    };
+    const locate = (list, fallback) => {
       const focal = list.find(a => here.test(permalink(a)?.pathname || '')) ||
-        list.find(a => a.getAttribute('tabindex') === '-1');
+        list.find(a => a.getAttribute('tabindex') === '-1') || fallback;
       const mine = focal ? handleOf(focal) : '';
       let start = list.indexOf(focal), end = start;
       while (mine && start > 0 && handleOf(list[start - 1]) === mine) start--;
@@ -86,12 +98,13 @@ export async function extractArticle() {
     };
     // X unmounts cells far from the viewport (each is positioned with translateY). One snapshot is enough unless the
     // focal post is gone, cells above were unmounted, or the thread runs into the last loaded post.
-    let articles = live(), { focal, start, end } = locate(articles), partial = false;
+    let articles = live(), { focal, start, end } = locate(articles, aboveReplyComposer(articles)), partial = false;
+    let sweptFocal;
     const firstTop = Number(articles[0]?.closest('[data-testid="cellInnerDiv"]')?.style.transform.match(/translateY\(([\d.]+)px\)/)?.[1]) || 0;
     const fromTop = !focal || (window.scrollY > 0 && (start === 0 || firstTop > 0));
     if (fromTop || end === articles.length - 1) {
       articles = await sweep(fromTop);
-      ({ focal, start, end } = locate(articles));
+      ({ focal, start, end } = locate(articles, sweptFocal));
     }
     if (!focal) return fail('The post is still loading. Give it a moment, then try again.');
     const thread = articles.slice(start, end + 1), ancestors = articles.slice(0, start);
@@ -136,10 +149,14 @@ export async function extractArticle() {
       const keyOf = (a) => permalink(a)?.getAttribute('href').match(/\/status\/(\d+)/)?.[1] || a.textContent;
       const snap = () => {
         let at = -1, added = 0;
-        for (const a of live()) {
+        const current = live();
+        const fallback = aboveReplyComposer(current);
+        for (const a of current) {
           const key = keyOf(a);
           if (!seen.has(key)) { order.splice(at + 1, 0, key); added++; }
-          seen.set(key, a.cloneNode(true));
+          const clone = a.cloneNode(true);
+          if (a === fallback || (sweptFocal && seen.get(key) === sweptFocal)) sweptFocal = clone;
+          seen.set(key, clone);
           at = order.indexOf(key);
         }
         return added;
@@ -150,7 +167,7 @@ export async function extractArticle() {
         if (top && window.scrollY > 0) { window.scrollTo(0, 0); await settle(500); }
         // ponytail: 60 screens caps a sweep at ~30 s; the warning tells the reader to scroll and retry past that.
         for (let step = 0; step < 60; step++) {
-          const added = snap(), now = locate(list());
+          const added = snap(), now = locate(list(), sweptFocal);
           if (now.focal && now.end < order.length - 1) return list();
           const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
           if (bottom && !added && step) return list();

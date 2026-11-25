@@ -238,6 +238,25 @@ test('finds a post by its media link when its timestamp is unlinked', async () =
   assert.doesNotMatch(result.markdown, /A reply/);
 });
 
+test('finds the post above the inline reply composer without a timestamp or media permalink', async () => {
+  const focal = post({ focal: true, body: text('Main post') })
+    .replace(' tabindex="-1"', '')
+    .replace(/<a href="\/alice\/status\/123">(<time.*?<\/time>)<\/a>/, '$1');
+  const cells = [
+    post({ handle: 'bob', name: 'Bob', id: '456', body: text('Parent post') }),
+    focal,
+    '<div data-testid="cellInnerDiv"><div data-testid="tweetTextarea_0"></div></div>',
+    post({ id: '789', body: text('A follow-up') }),
+    post({ handle: 'bob', name: 'Bob', id: '790', body: text('Unrelated reply') }),
+  ];
+  const result = await extract('<main data-testid="primaryColumn"></main>',
+    { setup: timeline(cells, { at: 1500 }) });
+  assert.equal(result.kind, 'thread');
+  assert.match(result.markdown, /Parent post[\s\S]*Main post[\s\S]*A follow-up/);
+  assert.doesNotMatch(result.markdown, /Unrelated reply/);
+  assert.equal(result.scrolledBackTo, 1500);
+});
+
 test('carries the whole reply chain as context, each post with its own quote', async () => {
   const result = await extract(`<main>
     ${post({ id: '90', body: text('<span>Root question</span>') })}
