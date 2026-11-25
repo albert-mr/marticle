@@ -65,11 +65,12 @@ export async function extractArticle() {
     const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
     const permalink = (a) => {
       const quote = quoteOf(a);
+      const media = '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]';
       const links = [...a.querySelectorAll('a[href*="/status/"]')].filter(x => !quote?.contains(x));
       return links.find(x => x.querySelector('time')) || links.find(x =>
         x.origin === location.origin && /^\/\w+\/status\/\d+\/(?:photo|video)\/\d+\/?$/.test(x.pathname) &&
         !x.closest('[data-testid="simpleTweet"], [data-testid="tweetText"], [data-testid="card.wrapper"]') &&
-        (x.matches('[data-testid="tweetPhoto"]') || x.querySelector('[data-testid="tweetPhoto"], [data-testid="videoPlayer"]')));
+        (x.matches(media) || x.querySelector(media)));
     };
     const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
     const live = () => [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
