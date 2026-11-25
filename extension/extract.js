@@ -152,7 +152,7 @@ export async function extractArticle() {
         const current = live();
         const fallback = aboveReplyComposer(current);
         for (const a of current) {
-          const key = keyOf(a);
+          const key = a === fallback ? id : keyOf(a);
           if (!seen.has(key)) { order.splice(at + 1, 0, key); added++; }
           const clone = a.cloneNode(true);
           if (a === fallback || (sweptFocal && seen.get(key) === sweptFocal)) sweptFocal = clone;
