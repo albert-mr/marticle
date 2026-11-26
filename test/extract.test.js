@@ -308,6 +308,40 @@ test('ignores a quote wrapper permalink when locating the post above the reply b
   assert.doesNotMatch(result.markdown, /A reply/);
 });
 
+test('reads X’s semantic post markup without legacy test IDs', async () => {
+  const result = await extract(`<main>
+    <article>
+      <div data-post-avatar="true"></div>
+      <a href="/alice"><div dir="auto">Alice</div></a><a href="/alice"><span>@alice</span></a>
+      <div dir="auto" lang="en">Main post\n\nSecond line</div>
+      <div role="link" data-slot="embedded-tweet-frame" data-href="/bob/status/456">
+        <a href="/bob/status/456" aria-hidden="true"></a>
+        <article>
+          <div data-post-avatar="true"></div>
+          <a href="/bob"><div dir="auto">Bob</div></a><a href="/bob">@bob</a>
+          <div dir="auto" lang="en">Quoted post</div>
+        </article>
+      </div>
+      <a href="/alice/status/123" aria-current="page">4:41 PM</a>
+    </article>
+    <div data-href="/alice/status/124"><article>
+      <div data-post-avatar="true"></div>
+      <a href="/alice"><div dir="auto">Alice</div></a><a href="/alice">@alice</a>
+      <div dir="auto" lang="en">Thread continuation</div>
+    </article></div>
+    <div data-href="/carol/status/125"><article>
+      <div data-post-avatar="true"></div>
+      <a href="/carol">@carol</a><div dir="auto" lang="en">Unrelated reply</div>
+    </article></div>
+  </main>`);
+  assert.equal(result.kind, 'thread', result.error);
+  assert.equal(result.author, 'Alice @alice');
+  assert.equal(result.stats.embeds, 1);
+  assert.match(result.markdown, /Main post\n\nSecond line\n\n> \[Bob @bob\]\(<https:\/\/x\.com\/bob\/status\/456>\)/);
+  assert.match(result.markdown, /Quoted post[\s\S]*Thread continuation/);
+  assert.doesNotMatch(result.markdown, /Unrelated reply/);
+});
+
 test('carries the whole reply chain as context, each post with its own quote', async () => {
   const result = await extract(`<main>
     ${post({ id: '90', body: text('<span>Root question</span>') })}
