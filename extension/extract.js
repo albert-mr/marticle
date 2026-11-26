@@ -62,14 +62,14 @@ export async function extractArticle() {
     const id = location.pathname.match(/\/status\/(\d+)/)?.[1];
     if (!id) return fail('Open a post in its own tab (click its date), or open an Article.');
     if (/\/status\/\d+\/(?:quotes|retweets|reposts|likes)/.test(location.pathname)) return fail('This page lists other posts. Open the post itself, then try again.');
-    const inQuote = (quotes, node) => {
+    const inQuote = (article, quotes, node) => {
       const wrapper = node.closest('div[role="link"]');
-      return quotes.some(quote => quote.contains(node) || wrapper?.contains(quote));
+      return quotes.some(quote => quote.contains(node) || (article.contains(wrapper) && wrapper.contains(quote)));
     };
     const permalink = (a) => {
       const media = '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]';
       const quotes = quoteCards(a);
-      const links = [...a.querySelectorAll('a[href*="/status/"]')].filter(x => !inQuote(quotes, x));
+      const links = [...a.querySelectorAll('a[href*="/status/"]')].filter(x => !inQuote(a, quotes, x));
       return links.find(x => x.querySelector('time')) || links.find(x =>
         x.origin === location.origin && /^\/\w+\/status\/\d+\/(?:photo|video)\/\d+\/?$/.test(x.pathname) &&
         !x.closest('[data-testid="simpleTweet"], [data-testid="tweetText"], [data-testid="card.wrapper"]') &&
@@ -126,7 +126,7 @@ export async function extractArticle() {
     if (!posts.length) return fail('The post is empty or still loading. Give it a moment, then try again.');
     if ([...ancestors, ...thread].some(a => {
       const quotes = quoteCards(a);
-      return [...a.querySelectorAll('[data-testid="tweet-text-show-more-link"]')].some(x => !inQuote(quotes, x));
+      return [...a.querySelectorAll('[data-testid="tweet-text-show-more-link"]')].some(x => !quotes.some(quote => quote.contains(x)));
     })) {
       warnings.add('A post is cut off. Click "Show more" on it, then try again.');
     }
@@ -135,7 +135,7 @@ export async function extractArticle() {
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
     const quotes = quoteCards(first);
     const published = (permalink(first)?.querySelector('time[datetime]') ||
-      [...first.querySelectorAll('time[datetime]')].find(el => !inQuote(quotes, el)))?.getAttribute('datetime') || '';
+      [...first.querySelectorAll('time[datetime]')].find(el => !inQuote(first, quotes, el)))?.getAttribute('datetime') || '';
     const textEl = [...first.querySelectorAll('[data-testid="tweetText"]')].find(el => !quotes.some(quote => quote.contains(el)));
     const text = textEl && withoutQuotes(textEl).textContent.trim().split('\n')[0].trim();
     const title = [...(text || `Post by ${author}`)].slice(0, 100).join(''); // by code point: never half an emoji

@@ -297,7 +297,7 @@ test('ignores a quote wrapper permalink when locating the post above the reply b
     .replace(' tabindex="-1"', '')
     .replace(/<a href="\/alice\/status\/123">(<time.*?<\/time>)<\/a>/, '$1');
   const result = await extract(`<main data-testid="primaryColumn">
-    ${focal}
+    <div role="link">${focal}</div>
     <div data-testid="tweetTextarea_0"></div>
     ${post({ handle: 'carol', id: '789', body: text('A reply') })}
   </main>`);
