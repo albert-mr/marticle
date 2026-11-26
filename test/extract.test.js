@@ -213,17 +213,19 @@ test('exports up to four nested quotes within a thread with each quote’s own b
   for (let depth = 5; depth >= 1; depth--) {
     const attrs = depth === 2 ? 'data-testid="simpleTweet"' : 'role="link"';
     quotes = `<div ${attrs}><div data-testid="User-Name"><span>Author ${depth}</span><span>@author${depth}</span></div>
-      ${text(`Quote depth ${depth}`)}
+      ${text(`Quote depth ${depth}${depth === 1 ? quotes : ''}`)}
       ${depth === 2 ? `<a href="/author2/status/222/photo/1">${photo('nested', 'Nested photo')}</a>` : ''}
-      ${quotes}</div>`;
+      ${depth === 1 ? '' : quotes}</div>`;
+    if (depth === 2) quotes = `<div role="link">${quotes}</div>`;
   }
   const result = await extract(`<main>
-    ${post({ focal: true, body: text('Main post') + quotes })}
+    ${post({ focal: true, body: text('Main post' + quotes) })}
     ${post({ id: '124', body: text('Thread continuation') })}
     ${post({ id: '125', handle: 'bob', body: text('Unrelated reply') })}
   </main>`);
   assert.equal(result.kind, 'thread');
   assert.equal(result.stats.embeds, 4);
+  assert.equal(result.title, 'Main post');
   assert.equal(result.stats.images, 1);
   assert.match(result.markdown, /^> \[Author 1 @author1\]\(<https:\/\/x\.com\/author1>\)$/m);
   assert.match(result.markdown, /^> > \[Author 2 @author2\]\(<https:\/\/x\.com\/author2\/status\/222>\)$/m);

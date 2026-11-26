@@ -111,9 +111,9 @@ export async function extractArticle() {
     const renderPost = (a) => {
       const quotes = quoteCards(a);
       const parts = [...a.querySelectorAll('[data-testid="tweetText"], [data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="card.wrapper"], [data-testid="cardPoll"]'), ...quotes]
-        .filter((el, _, all) => !all.some(other => other !== el && other.contains(el)))
+        .filter((el, _, all) => quotes.includes(el) || !all.some(other => other !== el && other.contains(el)))
         .sort((x, y) => (x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
-      return parts.map(el => (quotes.includes(el) ? embedded(el) : render(el))).join('').trim();
+      return parts.map(el => (quotes.includes(el) ? embedded(el) : render(withoutQuotes(el)))).join('').trim();
     };
     const quoted = embeds;
     const context = ancestors.map(a => cite(who(a.querySelector('[data-testid="User-Name"]')).join(' ') || (handleOf(a) ? `@${handleOf(a)}` : 'Post'),
@@ -129,7 +129,9 @@ export async function extractArticle() {
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
     const published = (permalink(first)?.querySelector('time[datetime]') ||
       [...first.querySelectorAll('time[datetime]')].find(el => !inQuote(first, el)))?.getAttribute('datetime') || '';
-    const text = first.querySelector('[data-testid="tweetText"]')?.textContent.trim().split('\n')[0].trim();
+    const quotes = quoteCards(first);
+    const textEl = [...first.querySelectorAll('[data-testid="tweetText"]')].find(el => !quotes.some(quote => quote.contains(el)));
+    const text = textEl && withoutQuotes(textEl).textContent.trim().split('\n')[0].trim();
     const title = [...(text || `Post by ${author}`)].slice(0, 100).join(''); // by code point: never half an emoji
     const content = posts.join('\n\n---\n\n');
     const markdown = [
@@ -288,10 +290,20 @@ export async function extractArticle() {
     return rows.map(row => `| ${Array.from({ length: width }, (_, i) => row[i] || '').join(' | ')} |`).join('\n') + '\n\n';
   }
   function quoteCards(root) {
-    const cards = [...root.querySelectorAll('div[role="link"], [data-testid="simpleTweet"], [data-testid="quoteTweet"]')]
-      .filter(el => visible(el) && (el.matches('[data-testid="simpleTweet"], [data-testid="quoteTweet"]') ||
-        el.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]')));
+    const explicit = '[data-testid="simpleTweet"], [data-testid="quoteTweet"]';
+    const cards = [];
+    for (const el of [...root.querySelectorAll(`div[role="link"], ${explicit}`)].reverse()) {
+      if (visible(el) && (el.matches(explicit) ||
+        [...el.querySelectorAll('[data-testid="tweetText"], [data-testid="User-Name"]')]
+          .some(node => !cards.some(card => card.contains(node))))) cards.unshift(el);
+    }
     return cards.filter((el, i) => !cards.slice(0, i).some(parent => parent.contains(el)));
+  }
+  function withoutQuotes(el) {
+    if (!quoteCards(el).length) return el;
+    const clone = el.cloneNode(true);
+    quoteCards(clone).forEach(quote => quote.remove());
+    return clone;
   }
   function embedded(el, depth = 1) {
     embeds++;
@@ -303,7 +315,7 @@ export async function extractArticle() {
     // A quoted post's own link is often only on its photo (/status/<id>/photo/1).
     const statusLink = links.map(h => h.match(/^https:\/\/[^/]+\/\w+\/(?:status|article)\/\d+(?=$|[?#]|\/(?:photo|video)\/)/)?.[0]).find(Boolean);
     const [text] = own('[data-testid="tweetText"]');
-    let content = text ? children(text).trim() : '';
+    let content = text ? children(withoutQuotes(text)).trim() : '';
     if (!text) {
       const clone = el.cloneNode(true);
       quoteCards(clone).forEach(quote => quote.remove());
