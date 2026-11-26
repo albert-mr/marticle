@@ -224,8 +224,8 @@ export async function extractArticle() {
           const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
           if (bottom && !added && step) return list();
           if (!bottom) window.scrollTo(0, window.scrollY + window.innerHeight * 0.8);
-          const singlePostVisible = now.focal && now.start === now.end;
-          await settle(bottom && !singlePostVisible ? 500 : 150);
+          // The page's end is where a late spinner would cut the thread short, so it gets the full half second.
+          await settle(bottom ? 500 : 150);
         }
         partial = true;
         return list();
