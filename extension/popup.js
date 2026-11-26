@@ -97,4 +97,5 @@ copyButton.addEventListener('click', () => (article ? copy() : load()));
 saveButton.addEventListener('click', save);
 pdfButton.addEventListener('click', pdf);
 document.addEventListener('keydown', () => document.body.classList.add('keys'), { once: true });
-load();
+// Give the static loading state a frame to paint before asking X for its content.
+requestAnimationFrame(() => requestAnimationFrame(load));
