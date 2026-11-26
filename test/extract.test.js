@@ -285,6 +285,29 @@ test('finds the post above the inline reply composer without a timestamp or medi
   assert.equal(result.scrolledBackTo, 1500);
 });
 
+test('ignores a quote wrapper permalink when locating the post above the reply box', async () => {
+  const focal = post({ focal: true, body: `${text('Main post')}
+    <div role="link">
+      <a href="/bob/status/456"><time datetime="2026-09-19T09:00:00Z">Earlier</time></a>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><span>Bob</span><span>@bob</span></div>
+        ${text('Quoted post')}
+      </div>
+    </div>` })
+    .replace(' tabindex="-1"', '')
+    .replace(/<a href="\/alice\/status\/123">(<time.*?<\/time>)<\/a>/, '$1');
+  const result = await extract(`<main data-testid="primaryColumn">
+    ${focal}
+    <div data-testid="tweetTextarea_0"></div>
+    ${post({ handle: 'carol', id: '789', body: text('A reply') })}
+  </main>`);
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.stats.embeds, 1);
+  assert.match(result.markdown, /Published: 2026-09-19T10:00:00Z/);
+  assert.match(result.markdown, /Main post[\s\S]*> Quoted post/);
+  assert.doesNotMatch(result.markdown, /A reply/);
+});
+
 test('carries the whole reply chain as context, each post with its own quote', async () => {
   const result = await extract(`<main>
     ${post({ id: '90', body: text('<span>Root question</span>') })}
