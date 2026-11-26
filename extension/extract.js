@@ -62,11 +62,11 @@ export async function extractArticle() {
     const id = location.pathname.match(/\/status\/(\d+)/)?.[1];
     if (!id) return fail('Open a post in its own tab (click its date), or open an Article.');
     if (/\/status\/\d+\/(?:quotes|retweets|reposts|likes)/.test(location.pathname)) return fail('This page lists other posts. Open the post itself, then try again.');
-    const quoteOf = (a) => [...a.querySelectorAll('div[role="link"]')].find(d => d.querySelector('[data-testid="tweetText"], [data-testid="User-Name"]'));
+    const inQuote = (a, node) => quoteCards(a).some(quote => quote.contains(node));
     const permalink = (a) => {
-      const quote = quoteOf(a);
       const media = '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]';
-      const links = [...a.querySelectorAll('a[href*="/status/"]')].filter(x => !quote?.contains(x));
+      const quotes = quoteCards(a);
+      const links = [...a.querySelectorAll('a[href*="/status/"]')].filter(x => !quotes.some(quote => quote.contains(x)));
       return links.find(x => x.querySelector('time')) || links.find(x =>
         x.origin === location.origin && /^\/\w+\/status\/\d+\/(?:photo|video)\/\d+\/?$/.test(x.pathname) &&
         !x.closest('[data-testid="simpleTweet"], [data-testid="tweetText"], [data-testid="card.wrapper"]') &&
@@ -109,11 +109,11 @@ export async function extractArticle() {
     if (!focal) return fail('The post is still loading. Give it a moment, then try again.');
     const thread = articles.slice(start, end + 1), ancestors = articles.slice(0, start);
     const renderPost = (a) => {
-      const quote = quoteOf(a);
-      const parts = [...a.querySelectorAll('[data-testid="tweetText"], [data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="card.wrapper"], [data-testid="cardPoll"]'), ...(quote ? [quote] : [])]
-        .filter((el, _, all) => !all.some(other => other !== el && other.contains(el)))
+      const quotes = quoteCards(a);
+      const parts = [...a.querySelectorAll('[data-testid="tweetText"], [data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="card.wrapper"], [data-testid="cardPoll"]'), ...quotes]
+        .filter((el, _, all) => quotes.includes(el) || !all.some(other => other !== el && other.contains(el)))
         .sort((x, y) => (x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
-      return parts.map(el => (el === quote ? embedded(el) : render(el))).join('').trim();
+      return parts.map(el => (quotes.includes(el) ? embedded(el) : render(withoutQuotes(el)))).join('').trim();
     };
     const quoted = embeds;
     const context = ancestors.map(a => cite(who(a.querySelector('[data-testid="User-Name"]')).join(' ') || (handleOf(a) ? `@${handleOf(a)}` : 'Post'),
@@ -121,17 +121,17 @@ export async function extractArticle() {
     embeds = quoted; // quotes inside the conversation above belong to those posts, not this one
     const posts = thread.map(renderPost).filter(Boolean);
     if (!posts.length) return fail('The post is empty or still loading. Give it a moment, then try again.');
-    if ([...ancestors, ...thread].some(a => [...a.querySelectorAll('[data-testid="tweet-text-show-more-link"]')].some(x => !quoteOf(a)?.contains(x)))) {
+    if ([...ancestors, ...thread].some(a => [...a.querySelectorAll('[data-testid="tweet-text-show-more-link"]')].some(x => !inQuote(a, x)))) {
       warnings.add('A post is cut off. Click "Show more" on it, then try again.');
     }
     if (partial) warnings.add('The thread may continue further down. Scroll down, then try again.');
     const mine = handleOf(focal), first = thread[0];
     const author = who(first.querySelector('[data-testid="User-Name"]')).join(' ') || (mine ? `@${mine}` : '');
-    const firstQuote = quoteOf(first);
     const published = (permalink(first)?.querySelector('time[datetime]') ||
-      [...first.querySelectorAll('time[datetime]')].find(el => !firstQuote?.contains(el) &&
-        !el.closest('[data-testid="simpleTweet"]')))?.getAttribute('datetime') || '';
-    const text = first.querySelector('[data-testid="tweetText"]')?.textContent.trim().split('\n')[0].trim();
+      [...first.querySelectorAll('time[datetime]')].find(el => !inQuote(first, el)))?.getAttribute('datetime') || '';
+    const quotes = quoteCards(first);
+    const textEl = [...first.querySelectorAll('[data-testid="tweetText"]')].find(el => !quotes.some(quote => quote.contains(el)));
+    const text = textEl && withoutQuotes(textEl).textContent.trim().split('\n')[0].trim();
     const title = [...(text || `Post by ${author}`)].slice(0, 100).join(''); // by code point: never half an emoji
     const content = posts.join('\n\n---\n\n');
     const markdown = [
@@ -289,28 +289,49 @@ export async function extractArticle() {
     rows.splice(1, 0, Array(width).fill('---'));
     return rows.map(row => `| ${Array.from({ length: width }, (_, i) => row[i] || '').join(' | ')} |`).join('\n') + '\n\n';
   }
-  function embedded(el) {
+  function quoteCards(root) {
+    const explicit = '[data-testid="simpleTweet"], [data-testid="quoteTweet"]';
+    const cards = [];
+    for (const el of [...root.querySelectorAll(`div[role="link"], ${explicit}`)].reverse()) {
+      if (visible(el) && (el.matches(explicit) ||
+        [...el.querySelectorAll('[data-testid="tweetText"], [data-testid="User-Name"]')]
+          .some(node => !cards.some(card => card.contains(node))))) cards.unshift(el);
+    }
+    return cards.filter((el, i) => !cards.slice(0, i).some(parent => parent.contains(el)));
+  }
+  function withoutQuotes(el) {
+    if (!quoteCards(el).length) return el;
+    const clone = el.cloneNode(true);
+    quoteCards(clone).forEach(quote => quote.remove());
+    return clone;
+  }
+  function embedded(el, depth = 1) {
     embeds++;
-    const attribution = who(el.querySelector('[data-testid="User-Name"]')).join(' ') || 'Embedded post';
-    const links = [...el.querySelectorAll('a[href]')].map(a => url(a.getAttribute('href')));
+    const quotes = quoteCards(el);
+    const own = (selector) => [...el.querySelectorAll(selector)].filter(node => !quotes.some(quote => quote.contains(node)));
+    const attribution = who(own('[data-testid="User-Name"]')[0]).join(' ') || 'Embedded post';
+    const links = own('a[href]').map(a => url(a.getAttribute('href')));
     const permalink = links.find(h => /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//.test(h));
     // A quoted post's own link is often only on its photo (/status/<id>/photo/1).
     const statusLink = links.map(h => h.match(/^https:\/\/[^/]+\/\w+\/(?:status|article)\/\d+(?=$|[?#]|\/(?:photo|video)\/)/)?.[0]).find(Boolean);
-    const text = el.querySelector('[data-testid="tweetText"]');
-    let content = text ? children(text).trim() : '';
+    const [text] = own('[data-testid="tweetText"]');
+    let content = text ? children(withoutQuotes(text)).trim() : '';
     if (!text) {
       const clone = el.cloneNode(true);
+      quoteCards(clone).forEach(quote => quote.remove());
       clone.querySelectorAll('[data-testid="User-Name"], img, time, button, svg, script, style').forEach(x => x.remove());
       content = children(clone).trim();
       if (!content) warnings.add('An embedded post’s text hasn’t loaded. Its link and media are kept.');
     }
     // ponytail: X trims long quoted posts with "…"; a post that really ends in "..." also trips this, it's only a warning.
-    if (el.querySelector('[data-testid="tweet-text-show-more-link"]') || /(?:…|\.\.\.)$/.test(text?.textContent.trim() || '')) {
+    if (own('[data-testid="tweet-text-show-more-link"]').length || /(?:…|\.\.\.)$/.test(text?.textContent.trim() || '')) {
       warnings.add('A quoted post may be cut off. Open it and copy it on its own for the full text.');
     }
-    const media = [...el.querySelectorAll('img, [data-testid="videoPlayer"]')].map(x => (x.tagName === 'IMG' ? renderImage(x) : render(x).trim())).filter(Boolean).join('\n\n');
+    const media = own('img, [data-testid="videoPlayer"]').map(x => (x.tagName === 'IMG' ? renderImage(x) : render(x).trim())).filter(Boolean).join('\n\n');
+    if (depth === 4 && quotes.length) warnings.add('Quotes are limited to four levels. Open a quoted post to copy deeper quotes.');
+    const nested = depth < 4 ? quotes.map(quote => embedded(quote, depth + 1).trim()).join('\n\n') : '';
     const handle = attribution.match(/@(\w{1,15})/)?.[1];
-    return cite(attribution, statusLink || permalink || (handle ? `https://x.com/${handle}` : ''), [content, media].filter(Boolean).join('\n\n'));
+    return cite(attribution, statusLink || permalink || (handle ? `https://x.com/${handle}` : ''), [content, media, nested].filter(Boolean).join('\n\n'));
   }
   // A Markdown blockquote: linked byline, then the body.
   function cite(label, href, body) {

@@ -50,7 +50,7 @@ The popup and the PDF page are dark, in Chrome's own style. The PDF itself is al
 
 - Author, publish date, and source URL at the top (plus the title, for articles)
 - **Posts**: the text with its line breaks, links, hashtags and emoji; images as direct full-resolution URLs; videos as a
-  thumbnail plus a link; quoted posts as quoted blocks; polls and link cards as text
+  thumbnail plus a link; quoted posts nested up to four levels; polls and link cards as text
 - **Threads**: the post you opened plus every post the same author added around it, separated by rules. X only keeps
   the posts near your screen on the page, so for a long thread Marticle scrolls through it, collects every post, and
   puts the page back where it was.
