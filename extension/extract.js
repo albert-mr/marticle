@@ -76,7 +76,10 @@ export async function extractArticle() {
         (x.matches(media) || x.querySelector(media)));
     };
     const handleOf = (a) => a.querySelector('[data-testid="User-Name"] a[href]')?.getAttribute('href').split('/')[1]?.toLowerCase() || '';
-    const live = () => [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
+    const live = () => {
+      const legacy = [...document.querySelectorAll('article[data-testid="tweet"]')].filter(visible);
+      return legacy.length ? legacy : semanticPosts();
+    };
     const here = new RegExp(`/status/${id}(?:[/?#]|$)`);
     const requestedHandle = location.pathname.match(/^\/(\w+)\/status\//)?.[1]?.toLowerCase();
     // The inline reply composer follows the focal post on status pages.
@@ -147,6 +150,49 @@ export async function extractArticle() {
     const words = content.split(/\s+/).filter(Boolean).length;
     return { ok: true, kind: thread.length > 1 ? 'thread' : 'post', title, author, source, markdown,
       stats: { words, images: images.size, embeds, posts: thread.length }, warnings: [...warnings] };
+
+    // X also serves semantic articles without legacy test IDs. Normalize a detached copy for the existing exporter.
+    function semanticPosts() {
+      const posts = new Map();
+      const statusPath = /^\/(?:\w+|i\/web)\/status\/(\d+)$/;
+      const frame = '[data-slot="embedded-tweet-frame"]';
+      const own = (a, selector) => [...a.querySelectorAll(selector)].filter(el =>
+        el.closest('article') === a && el.closest(frame) === a.closest(frame));
+      for (const article of document.querySelectorAll('main article')) {
+        if (article.closest(frame) || !visible(article) || !own(article, '[data-post-avatar]').length) continue;
+        const href = article.parentElement.getAttribute('data-href') ||
+          own(article, 'a[aria-current="page"][href]').map(a => a.pathname).find(path => statusPath.test(path));
+        const statusId = href?.match(statusPath)?.[1];
+        if (!statusId || posts.has(statusId)) continue;
+        const copy = article.cloneNode(true);
+        copy.querySelectorAll(frame).forEach(el => el.setAttribute('data-testid', 'quoteTweet'));
+        for (const a of [copy, ...copy.querySelectorAll(`${frame} article`)]) {
+          const links = own(a, 'a[href]');
+          const handleLink = links.find(link => /^\/\w+$/.test(link.pathname) &&
+            link.textContent.trim().toLowerCase() === '@' + link.pathname.slice(1).toLowerCase());
+          if (handleLink) {
+            const byline = document.createElement('div');
+            byline.setAttribute('data-testid', 'User-Name');
+            const nameLink = links.find(link => link.pathname === handleLink.pathname && link.querySelector('[dir="auto"]'));
+            byline.append(...[nameLink, handleLink].filter(Boolean).map(link => link.cloneNode(true)));
+            a.prepend(byline);
+          }
+          own(a, '[dir="auto"][lang]').forEach(el => el.setAttribute('data-testid', 'tweetText'));
+          own(a, 'img[src*="pbs.twimg.com/media/"]').forEach(el => el.setAttribute('data-testid', 'tweetPhoto'));
+          own(a, 'video').forEach(el => el.setAttribute('data-testid', 'videoPlayer'));
+        }
+        const link = document.createElement('a');
+        link.href = href;
+        const time = document.createElement('time');
+        // X status IDs encode their creation time in milliseconds after the Snowflake epoch.
+        const date = new Date(Number((BigInt(statusId) >> 22n) + 1288834974657n));
+        if (Number.isFinite(date.getTime())) time.dateTime = date.toISOString();
+        link.append(time);
+        copy.append(link);
+        posts.set(statusId, copy);
+      }
+      return [...posts.values()];
+    }
 
     // Scroll (from the top when needed) in 80%-of-a-screen steps, keeping a clone of every post by status id in page
     // order, until another author's post closes the thread or the page ends. The reader's scroll position is restored.
