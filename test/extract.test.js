@@ -158,6 +158,41 @@ test('copies a single post with line breaks, links, media and metadata and no ti
   assert.deepEqual({ ...result.stats }, { words: result.stats.words, images: 1, embeds: 0, posts: 1 });
 });
 
+test('opens a loaded standalone post without a half-second wait at the bottom', async () => {
+  let elapsed = 0;
+  const result = await extract(`<main>${post({ focal: true, body: text('Ready') })}</main>`, {
+    setup(window) {
+      window.Date.now = () => elapsed;
+      window.setTimeout = (callback, delay) => {
+        elapsed += delay;
+        queueMicrotask(callback);
+      };
+    },
+  });
+  assert.equal(result.kind, 'post');
+  assert.ok(elapsed < 500, `waited ${elapsed} ms for the loaded post`);
+});
+
+test('still waits for an active thread loader at the bottom', async () => {
+  let elapsed = 0;
+  const result = await extract(`<main>${post({ focal: true, body: text('First post') })}<div role="progressbar"></div></main>`, {
+    setup(window) {
+      window.Date.now = () => elapsed;
+      window.setTimeout = (callback, delay) => {
+        elapsed += delay;
+        if (elapsed === 450) {
+          const loader = window.document.querySelector('[role="progressbar"]');
+          loader.insertAdjacentHTML('beforebegin', post({ id: '124', body: text('Late continuation') }));
+          loader.remove();
+        }
+        queueMicrotask(callback);
+      };
+    },
+  });
+  assert.equal(result.kind, 'thread');
+  assert.match(result.markdown, /Late continuation/);
+});
+
 test('keeps literal ~~ and --- lines in a post from turning into strikethrough, rules or headings', async () => {
   const result = await extract(`<main>${post({ focal: true, body: text('<span>Big news\n---\n~~not struck~~ and ~5 min, a-b\n===</span>') })}</main>`);
   assert.match(result.markdown, /Big news\n\\---\n\\~\\~not struck\\~\\~ and ~5 min, a-b\n\\===\n/);

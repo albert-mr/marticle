@@ -6,10 +6,13 @@ import { JSDOM } from 'jsdom';
 const article = { ok: true, kind: 'article', title: 'Test article: draft/final?', author: 'Alice @alice', markdown: '# Test article\n\nContent\n', source: 'https://x.com/alice/status/123', stats: { words: 3, images: 1, embeds: 0 }, warnings: ['A table has merged cells, so its layout is simplified.'] };
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 
-async function popup({ url = article.source, extraction = article, clipboard = true, delay = 0 } = {}) {
+async function popup({ url = article.source, extraction = article, clipboard = true, delay = 0, deferFrames = false } = {}) {
   const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'https://extension.example/popup.html', runScripts: 'outside-only' });
   const state = { writes: [], downloads: [], tabs: [], injected: false };
+  const frames = [];
+  dom.window.requestAnimationFrame = callback => frames.push(callback);
+  const frame = () => frames.splice(0).forEach(callback => callback(0));
   dom.window.chrome = {
     tabs: { query: async () => [{ id: 7, url }], create: async ({ url }) => state.tabs.push(url) },
     runtime: { getURL: path => `chrome-extension://abc/${path}` },
@@ -24,10 +27,27 @@ async function popup({ url = article.source, extraction = article, clipboard = t
   dom.window.extractArticle = () => {};
   const source = await readFile(new URL('../extension/popup.js', import.meta.url), 'utf8');
   dom.window.eval(`(async () => { ${source.replace(/^import .*;$/m, '')} })()`);
+  if (!deferFrames) { frame(); frame(); }
   await tick();
   const $ = selector => dom.window.document.querySelector(selector);
-  return { state, $, click: async selector => { $(selector).click(); await tick(); }, close: () => dom.window.close() };
+  return { state, $, frame, click: async selector => { $(selector).click(); await tick(); }, close: () => dom.window.close() };
 }
+
+test('shows the loading popup before starting extraction', async () => {
+  const p = await popup({ deferFrames: true });
+  try {
+    assert.match(p.$('#title').textContent, /Reading this page/);
+    assert.equal(p.$('#card').getAttribute('aria-busy'), 'true');
+    assert.equal(p.state.injected, false);
+    p.frame();
+    await tick();
+    assert.equal(p.state.injected, false);
+    p.frame();
+    await tick();
+    assert.equal(p.state.injected, true);
+    assert.equal(p.$('#title').textContent, article.title);
+  } finally { p.close(); }
+});
 
 test('copies the article as Markdown', async () => {
   const p = await popup();

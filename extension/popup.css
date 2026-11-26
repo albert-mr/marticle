@@ -12,12 +12,20 @@ h1 { margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 500; over
 #status.error { color: var(--error); }
 /* While reading: grey bars where the label, the author and the counts will be, so the popup keeps its size. */
 #card[aria-busy="true"] h1 { color: var(--subtle); }
+#card[aria-busy="true"] h1::before {
+  content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -2px;
+  border: 2px solid color-mix(in srgb, var(--primary) 25%, transparent); border-top-color: var(--primary);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
 #card[aria-busy="true"] :is(#kind, #status):empty::before, #card[aria-busy="true"] #status:empty::after {
-  content: ""; display: block; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--text) 12%, transparent); animation: pulse .8s ease-in-out infinite alternate; }
+  content: ""; display: block; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--text) 12%, transparent); }
 #card[aria-busy="true"] #kind:empty::before { width: 44px; margin: 3px 0; }
 #card[aria-busy="true"] #status:empty::before { width: 52%; margin: 4px 0 8px; }
 #card[aria-busy="true"] #status:empty::after { width: 68%; margin-bottom: 4px; }
-@keyframes pulse { to { opacity: .4; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #card[aria-busy="true"] h1::before { animation: none; }
+}
 
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .actions button { padding: 0 12px; }
