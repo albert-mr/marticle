@@ -9,7 +9,7 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 async function popup({ url = article.source, extraction = article, clipboard = true, delay = 0, deferFrames = false } = {}) {
   const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'https://extension.example/popup.html', runScripts: 'outside-only' });
-  const state = { writes: [], downloads: [], tabs: [], injected: false };
+  const state = { writes: [], downloads: [], tabs: [], injected: false, extractorLoaded: false };
   const frames = [];
   dom.window.requestAnimationFrame = callback => frames.push(callback);
   const frame = () => frames.splice(0).forEach(callback => callback(0));
@@ -24,9 +24,12 @@ async function popup({ url = article.source, extraction = article, clipboard = t
   } } });
   dom.window.URL.createObjectURL = () => 'blob:test';
   dom.window.HTMLAnchorElement.prototype.click = function () { state.downloads.push(this.download); };
-  dom.window.extractArticle = () => {};
+  dom.window.loadExtractor = async () => {
+    state.extractorLoaded = true;
+    return { extractArticle: () => {} };
+  };
   const source = await readFile(new URL('../extension/popup.js', import.meta.url), 'utf8');
-  dom.window.eval(`(async () => { ${source.replace(/^import .*;$/m, '')} })()`);
+  dom.window.eval(source.replace("import('./extract.js')", 'loadExtractor()'));
   if (!deferFrames) { frame(); frame(); }
   await tick();
   const $ = selector => dom.window.document.querySelector(selector);
@@ -38,12 +41,15 @@ test('shows the loading popup before starting extraction', async () => {
   try {
     assert.match(p.$('#title').textContent, /Reading this page/);
     assert.equal(p.$('#card').getAttribute('aria-busy'), 'true');
+    assert.equal(p.state.extractorLoaded, false);
     assert.equal(p.state.injected, false);
     p.frame();
     await tick();
+    assert.equal(p.state.extractorLoaded, false);
     assert.equal(p.state.injected, false);
     p.frame();
     await tick();
+    assert.equal(p.state.extractorLoaded, true);
     assert.equal(p.state.injected, true);
     assert.equal(p.$('#title').textContent, article.title);
   } finally { p.close(); }
@@ -110,6 +116,7 @@ test('shows the extraction error and offers a retry', async () => {
 test('does not inject into tabs that are not on X', async () => {
   const p = await popup({ url: 'https://example.com/' });
   try {
+    assert.equal(p.state.extractorLoaded, false);
     assert.equal(p.state.injected, false);
     assert.match(p.$('#status').textContent, /x\.com/);
     assert.equal(p.$('.actions').hidden, true, 'nothing to retry on a page that is not X');

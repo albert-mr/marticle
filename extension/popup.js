@@ -1,5 +1,3 @@
-import { extractArticle } from './extract.js';
-
 const $ = selector => document.querySelector(selector);
 const card = $('#card'), kind = $('#kind'), title = $('#title'), status = $('#status'), live = $('#live');
 const actions = $('.actions'), copyButton = $('#copy'), saveButton = $('#save'), pdfButton = $('#pdf');
@@ -39,6 +37,7 @@ async function load() {
       actions.hidden = details.hidden = true;
       return;
     }
+    const { extractArticle } = await import('./extract.js');
     const [response] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractArticle });
     const result = response?.result;
     if (!result?.ok) throw new Error(result?.error || 'The page gave nothing back. Reload it, then try again.');
