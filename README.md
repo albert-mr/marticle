@@ -36,7 +36,8 @@ Works in any Chromium browser: Chrome, Brave, Edge, Arc.
 ## Use
 
 Open a post, a thread or an Article on x.com (click a post's date to open it in its own tab) and click Marticle,
-or press `Alt+Shift+M` (change it at `chrome://extensions/shortcuts`).
+or press **Option+Shift+J (⌥⇧J)** on macOS or **Alt+Shift+J** on Windows and Linux.
+To check or change your assigned shortcut, open `chrome://extensions/shortcuts`.
 
 - **Copy as Markdown** puts it on your clipboard. It is the default button, so Enter works too.
 - **Save as .md** downloads a file named after the title.
